@@ -4,6 +4,11 @@ const protocols = [
     name: "УЗИ молочной железы и лимфоузлов",
     file: "Temp.txt",
   },
+  {
+    id: "lymph",
+    name: "УЗИ лимфатических узлов",
+    file: "LymphNodes.txt",
+  },
 ];
 
 const protocolSelect = document.getElementById("protocolSelect");
@@ -13,7 +18,6 @@ const loadStatus = document.getElementById("loadStatus");
 
 const templateCache = new Map();
 let currentBlocks = [];
-let lastGenerated = "";
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -26,47 +30,25 @@ function populateProtocolOptions() {
 
 async function loadTemplate(protocolId) {
   const protocol = protocols.find((item) => item.id === protocolId);
-  if (!protocol) return "";
+  if (!protocol) return null;
   if (templateCache.has(protocol.file)) {
     return templateCache.get(protocol.file);
   }
   const response = await fetch(protocol.file);
-  const text = await response.text();
-  templateCache.set(protocol.file, text);
-  return text;
+  const data = await response.json();
+  templateCache.set(protocol.file, data);
+  return data;
 }
 
-function splitBlocks(template) {
-  const multiStart = "<многострочное заполнение>";
-  const multiEnd = "</многострочное заполнение>";
-  const blocks = [];
-  let index = 0;
-
-  while (index < template.length) {
-    const start = template.indexOf(multiStart, index);
-    if (start === -1) {
-      blocks.push({ type: "normal", content: template.slice(index) });
-      break;
-    }
-
-    if (start > index) {
-      blocks.push({ type: "normal", content: template.slice(index, start) });
-    }
-
-    const end = template.indexOf(multiEnd, start + multiStart.length);
-    if (end === -1) {
-      blocks.push({ type: "normal", content: template.slice(start) });
-      break;
-    }
-
-    const content = template.slice(start + multiStart.length, end);
-    blocks.push({ type: "repeat", content });
-    index = end + multiEnd.length;
+function normalizeBlocks(template) {
+  if (!template || !Array.isArray(template.blocks)) {
+    return [];
   }
 
-  return blocks.map((block) => ({
-    ...block,
-    content: block.content.replace(/<добавить строку\s*>/gi, ""),
+  return template.blocks.map((block) => ({
+    type: block.type || "text",
+    title: block.title || "",
+    content: block.content || "",
   }));
 }
 
@@ -91,7 +73,11 @@ function parseSegments(text) {
       options.push("");
     }
 
-    segments.push({ type: "field", options, valueIndex: 0 });
+    segments.push({
+      type: "field",
+      options,
+      value: options[0] ?? "",
+    });
     lastIndex = match.index + match[0].length;
   }
 
@@ -114,7 +100,7 @@ function assembleRow(row) {
       if (segment.type === "text") {
         return segment.value;
       }
-      return segment.options[segment.valueIndex] ?? "";
+      return segment.value ?? "";
     })
     .join("");
 }
@@ -122,16 +108,47 @@ function assembleRow(row) {
 function updateOutput() {
   const text = currentBlocks
     .map((block) => {
-      if (block.type === "normal") {
+      if (block.type === "text") {
         return assembleRow(block.rows[0]);
       }
-      const rowsText = block.rows.map((row) => assembleRow(row).trim()).filter(Boolean);
+      const rowsText = block.rows
+        .map((row) => assembleRow(row).trim())
+        .filter(Boolean);
       return rowsText.join("\n");
     })
     .join("");
 
-  lastGenerated = text.trim();
-  protocolOutput.value = lastGenerated;
+  protocolOutput.value = text.trim();
+}
+
+function renderField(segment, onChange) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "field";
+
+  const inputId = `field-${Math.random().toString(36).slice(2, 9)}`;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = segment.value ?? "";
+  input.setAttribute("list", inputId);
+  input.className = "field-input";
+
+  const dataList = document.createElement("datalist");
+  dataList.id = inputId;
+
+  segment.options.forEach((option) => {
+    const optionEl = document.createElement("option");
+    optionEl.value = option;
+    dataList.appendChild(optionEl);
+  });
+
+  input.addEventListener("input", (event) => {
+    segment.value = event.target.value;
+    onChange();
+  });
+
+  wrapper.appendChild(input);
+  wrapper.appendChild(dataList);
+  return wrapper;
 }
 
 function renderRow(row, onChange) {
@@ -147,20 +164,7 @@ function renderRow(row, onChange) {
       return;
     }
 
-    const select = document.createElement("select");
-    segment.options.forEach((option) => {
-      const optionEl = document.createElement("option");
-      optionEl.value = option;
-      optionEl.textContent = option === "" ? "—" : option;
-      select.appendChild(optionEl);
-    });
-    select.value = segment.options[segment.valueIndex] ?? "";
-    select.addEventListener("change", (event) => {
-      const value = event.target.value;
-      segment.valueIndex = segment.options.indexOf(value);
-      onChange();
-    });
-    rowEl.appendChild(select);
+    rowEl.appendChild(renderField(segment, onChange));
   });
 
   return rowEl;
@@ -172,6 +176,13 @@ function renderBlocks(blocks) {
   blocks.forEach((block) => {
     const wrapper = document.createElement("div");
     wrapper.className = "form-block";
+
+    if (block.title) {
+      const title = document.createElement("h2");
+      title.className = "form-title";
+      title.textContent = block.title;
+      wrapper.appendChild(title);
+    }
 
     const rowsContainer = document.createElement("div");
     rowsContainer.className = "rows";
@@ -222,7 +233,7 @@ function renderBlocks(blocks) {
 async function handleProtocolChange() {
   loadStatus.textContent = "Загрузка...";
   const template = await loadTemplate(protocolSelect.value);
-  currentBlocks = splitBlocks(template).map((block) => ({
+  currentBlocks = normalizeBlocks(template).map((block) => ({
     ...block,
     rows: [createRow(block.content)],
   }));

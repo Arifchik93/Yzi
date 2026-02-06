@@ -55,16 +55,30 @@ body {
   border: 1px solid #e1e2e6;
 }
 
+.form-title {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+
 .form-row {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   line-height: 1.5;
+  align-items: center;
 }
 
 .text-segment {
   white-space: pre-wrap;
   font-size: 0.95rem;
+}
+
+.field-input {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid #cfd2d8;
+  background: #fff;
+  min-width: 160px;
 }
 
 select {
