@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Шаблон протокола УЗИ</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="page">
+    <header class="page__header">
+      <h1>Пример заполнения протокола УЗИ</h1>
+      <p class="page__subtitle">
+        Выберите шаблон, заполните поля и сразу редактируйте итоговый текст протокола.
+      </p>
+    </header>
+
+    <section class="protocol-picker">
+      <label for="protocolSelect">Шаблон протокола</label>
+      <select id="protocolSelect"></select>
+      <span id="loadStatus" class="status">Загрузка...</span>
+    </section>
+
+    <section>
+      <div id="formContainer" class="form"></div>
+    </section>
+
+    <section class="output">
+      <label for="protocolOutput">Итоговый протокол (можно редактировать вручную)</label>
+      <textarea id="protocolOutput" rows="16"></textarea>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
