@@ -58,6 +58,75 @@ function parseSegments(text) {
   let lastIndex = 0;
   let match;
 
+  const parseOptionTokens = (rawOption) => {
+    const tokens = [];
+    const placeholderRegex = /__|<[^>]+>/g;
+    let lastTokenIndex = 0;
+    let placeholderMatch;
+    let inputIndex = 0;
+
+    const pushText = (value) => {
+      if (!value) return;
+      tokens.push({ type: "text", value });
+    };
+
+    while ((placeholderMatch = placeholderRegex.exec(rawOption))) {
+      const tokenStart = placeholderMatch.index;
+      const tokenValue = placeholderMatch[0];
+
+      if (tokenStart > lastTokenIndex) {
+        pushText(rawOption.slice(lastTokenIndex, tokenStart));
+      }
+
+      if (tokenValue === "__") {
+        tokens.push({
+          type: "input",
+          inputType: "number",
+          inputIndex: inputIndex++,
+          placeholder: "число",
+        });
+      } else if (tokenValue.startsWith("<")) {
+        const inner = tokenValue.slice(1, -1).trim();
+        const normalized = inner.toLowerCase().replace(/\s+/g, " ");
+
+        if (normalized.includes("дд.мм.гггг")) {
+          tokens.push({
+            type: "input",
+            inputType: "date",
+            inputIndex: inputIndex++,
+            placeholder: "дд.мм.гггг",
+          });
+        } else if (normalized.includes("число")) {
+          tokens.push({
+            type: "input",
+            inputType: "number",
+            inputIndex: inputIndex++,
+            placeholder: "число",
+          });
+        } else if (normalized.includes("0.52") || normalized.includes("объём") || normalized.includes("эллип")) {
+          tokens.push({
+            type: "calc",
+            formula: "ellipse",
+          });
+        } else {
+          pushText(tokenValue);
+        }
+      }
+
+      lastTokenIndex = tokenStart + tokenValue.length;
+    }
+
+    if (lastTokenIndex < rawOption.length) {
+      pushText(rawOption.slice(lastTokenIndex));
+    }
+
+    return {
+      raw: rawOption,
+      tokens,
+      inputValues: Array(inputIndex).fill(""),
+    };
+  };
+
   while ((match = regex.exec(text))) {
     if (match.index > lastIndex) {
       segments.push({ type: "text", value: text.slice(lastIndex, match.index) });
@@ -73,10 +142,12 @@ function parseSegments(text) {
       options.push("");
     }
 
+    const parsedOptions = options.map((option) => parseOptionTokens(option));
     segments.push({
       type: "field",
-      options,
-      value: options[0] ?? "",
+      options: parsedOptions,
+      selectedOptionIndex: 0,
+      value: parsedOptions[0] ? assembleOption(parsedOptions[0]) : "",
     });
     lastIndex = match.index + match[0].length;
   }
@@ -105,6 +176,39 @@ function assembleRow(row) {
     .join("");
 }
 
+function formatDate(value) {
+  if (!value) return "";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}.${month}.${year}`;
+}
+
+function computeEllipseVolume(values) {
+  if (values.length < 3) return "";
+  const [a, b, c] = values.map((item) => Number.parseFloat(item));
+  if ([a, b, c].some((item) => Number.isNaN(item))) return "";
+  const volume = (a * b * c * 0.52) / 1000;
+  return volume.toFixed(2);
+}
+
+function assembleOption(option) {
+  return option.tokens
+    .map((token) => {
+      if (token.type === "text") {
+        return token.value;
+      }
+      if (token.type === "input") {
+        const value = option.inputValues[token.inputIndex] ?? "";
+        return token.inputType === "date" ? formatDate(value) : value;
+      }
+      if (token.type === "calc") {
+        return computeEllipseVolume(option.inputValues);
+      }
+      return "";
+    })
+    .join("");
+}
+
 function updateOutput() {
   const text = currentBlocks
     .map((block) => {
@@ -119,35 +223,99 @@ function updateOutput() {
     .join("");
 
   protocolOutput.value = text.trim();
+  resizeTextarea(protocolOutput);
 }
 
 function renderField(segment, onChange) {
   const wrapper = document.createElement("span");
   wrapper.className = "field";
 
-  const inputId = `field-${Math.random().toString(36).slice(2, 9)}`;
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = segment.value ?? "";
-  input.setAttribute("list", inputId);
-  input.className = "field-input";
+  const select = document.createElement("select");
+  select.className = "field-select";
 
-  const dataList = document.createElement("datalist");
-  dataList.id = inputId;
-
-  segment.options.forEach((option) => {
+  segment.options.forEach((option, index) => {
     const optionEl = document.createElement("option");
-    optionEl.value = option;
-    dataList.appendChild(optionEl);
+    optionEl.value = String(index);
+    optionEl.textContent = option.raw || "—";
+    select.appendChild(optionEl);
   });
 
-  input.addEventListener("input", (event) => {
-    segment.value = event.target.value;
-    onChange();
+  select.value = String(segment.selectedOptionIndex);
+
+  const extras = document.createElement("span");
+  extras.className = "field-extras";
+
+  const renderExtras = () => {
+    extras.innerHTML = "";
+    const option = segment.options[segment.selectedOptionIndex];
+    if (!option) return;
+
+    const updateSegmentValue = () => {
+      segment.value = assembleOption(option);
+      onChange();
+    };
+
+    option.tokens.forEach((token) => {
+      if (token.type === "input") {
+        const input = document.createElement("input");
+        input.type = token.inputType;
+        input.value = option.inputValues[token.inputIndex] ?? "";
+        input.placeholder = token.placeholder;
+        input.className = "field-input field-input--compact";
+        if (token.inputType === "number") {
+          input.inputMode = "decimal";
+          input.step = "any";
+        }
+        if (token.inputType === "date") {
+          input.classList.add("field-input--date");
+        }
+        autoSizeInput(input);
+        input.addEventListener("input", (event) => {
+          option.inputValues[token.inputIndex] = event.target.value;
+          autoSizeInput(input);
+          updateSegmentValue();
+          updateCalcOutputs();
+        });
+        extras.appendChild(input);
+        return;
+      }
+
+      if (token.type === "calc") {
+        const output = document.createElement("span");
+        output.className = "calc-output";
+        output.textContent = computeEllipseVolume(option.inputValues);
+        extras.appendChild(output);
+      }
+    });
+
+    updateSegmentValue();
+  };
+
+  const updateCalcOutputs = () => {
+    const option = segment.options[segment.selectedOptionIndex];
+    if (!option) return;
+    extras.querySelectorAll(".calc-output").forEach((el) => {
+      el.textContent = computeEllipseVolume(option.inputValues);
+    });
+  };
+
+  const resizeSelect = () => {
+    const text = select.options[select.selectedIndex]?.textContent || "";
+    const size = Math.min(Math.max(text.length, 6), 40);
+    select.style.width = `${size + 2}ch`;
+  };
+
+  select.addEventListener("change", () => {
+    segment.selectedOptionIndex = Number(select.value);
+    renderExtras();
+    resizeSelect();
   });
 
-  wrapper.appendChild(input);
-  wrapper.appendChild(dataList);
+  renderExtras();
+  resizeSelect();
+
+  wrapper.appendChild(select);
+  wrapper.appendChild(extras);
   return wrapper;
 }
 
@@ -247,3 +415,57 @@ protocolSelect.addEventListener("change", handleProtocolChange);
 
 populateProtocolOptions();
 handleProtocolChange();
+
+function resizeTextarea(textarea) {
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
+function autoSizeInput(input) {
+  const valueLength = input.value.length || input.placeholder.length || 1;
+  input.style.width = `${Math.min(Math.max(valueLength + 1, 4), 20)}ch`;
+}
+
+function copyProtocol() {
+  const text = protocolOutput.value.trim();
+  if (!text) return;
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text);
+    return;
+  }
+  protocolOutput.focus();
+  protocolOutput.select();
+  document.execCommand("copy");
+}
+
+function shareProtocol(platform) {
+  const text = protocolOutput.value.trim();
+  if (!text) return;
+  const encoded = encodeURIComponent(text);
+  let url = "";
+
+  if (platform === "telegram") {
+    url = `https://t.me/share/url?text=${encoded}`;
+  }
+
+  if (platform === "max") {
+    url = `https://max.ru/share?text=${encoded}`;
+  }
+
+  if (url) {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
+document.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.matches("[data-copy]")) {
+    copyProtocol();
+  }
+  if (target.matches("[data-share]")) {
+    shareProtocol(target.dataset.share);
+  }
+});
+
+protocolOutput.addEventListener("input", () => resizeTextarea(protocolOutput));
