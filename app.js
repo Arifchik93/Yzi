@@ -96,7 +96,18 @@ function parseSegments(text) {
         const normalized = inner.toLowerCase().replace(/\s+/g, " ");
         const normalizedNumeric = normalized.replace(",", ".");
 
-        if (normalized.includes("дд.мм.гггг")) {
+        if (
+          normalizedNumeric.includes("0.52") ||
+          normalized.includes("0,52") ||
+          normalized.includes("объем") ||
+          normalized.includes("объём") ||
+          normalized.includes("эллип")
+        ) {
+          tokens.push({
+            type: "calc",
+            formula: "ellipse",
+          });
+        } else if (normalized.includes("дд.мм.гггг")) {
           tokens.push({
             type: "input",
             inputType: "date",
@@ -109,17 +120,6 @@ function parseSegments(text) {
             inputType: "number",
             inputIndex: inputIndex++,
             placeholder: "число",
-          });
-        } else if (
-          normalizedNumeric.includes("0.52") ||
-          normalized.includes("0,52") ||
-          normalized.includes("объем") ||
-          normalized.includes("объём") ||
-          normalized.includes("эллип")
-        ) {
-          tokens.push({
-            type: "calc",
-            formula: "ellipse",
           });
         } else {
           pushText(tokenValue);
@@ -172,7 +172,18 @@ function parseSegments(text) {
         const normalized = inner.toLowerCase().replace(/\s+/g, " ");
         const normalizedNumeric = normalized.replace(",", ".");
 
-        if (normalized.includes("дд.мм.гггг")) {
+        if (
+          normalizedNumeric.includes("0.52") ||
+          normalized.includes("0,52") ||
+          normalized.includes("объем") ||
+          normalized.includes("объём") ||
+          normalized.includes("эллип")
+        ) {
+          tokens.push({
+            type: "calc",
+            formula: "ellipse",
+          });
+        } else if (normalized.includes("дд.мм.гггг")) {
           tokens.push({
             type: "input",
             inputType: "date",
@@ -185,17 +196,6 @@ function parseSegments(text) {
             inputType: "number",
             inputIndex: inputIndex++,
             placeholder: "число",
-          });
-        } else if (
-          normalizedNumeric.includes("0.52") ||
-          normalized.includes("0,52") ||
-          normalized.includes("объем") ||
-          normalized.includes("объём") ||
-          normalized.includes("эллип")
-        ) {
-          tokens.push({
-            type: "calc",
-            formula: "ellipse",
           });
         } else {
           pushText(tokenValue);
@@ -349,14 +349,20 @@ function renderField(segment, onChange) {
   input.type = "text";
   input.className = "field-select-input";
 
-  const datalist = document.createElement("datalist");
-  datalist.id = `field-options-${Math.random().toString(16).slice(2)}`;
-  input.setAttribute("list", datalist.id);
+  const optionsList = document.createElement("div");
+  optionsList.className = "field-options";
 
-  segment.options.forEach((option) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = option.raw || "—";
-    datalist.appendChild(optionEl);
+  segment.options.forEach((option, index) => {
+    const optionButton = document.createElement("button");
+    optionButton.type = "button";
+    optionButton.className = "field-option";
+    optionButton.textContent = option.raw || "—";
+    optionButton.addEventListener("click", () => {
+      segment.selectedOptionIndex = index;
+      renderExtras();
+      hideOptions();
+    });
+    optionsList.appendChild(optionButton);
   });
 
   const extras = document.createElement("span");
@@ -424,6 +430,14 @@ function renderField(segment, onChange) {
     autoSizeInput(input);
   };
 
+  const showOptions = () => {
+    optionsList.style.display = "flex";
+  };
+
+  const hideOptions = () => {
+    optionsList.style.display = "none";
+  };
+
   input.addEventListener("input", () => {
     const value = input.value;
     const matchIndex = segment.options.findIndex((option) => option.raw === value);
@@ -437,6 +451,19 @@ function renderField(segment, onChange) {
       onChange();
     }
     autoSizeInput(input);
+    showOptions();
+  });
+
+  input.addEventListener("focus", () => {
+    showOptions();
+  });
+
+  input.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      if (!optionsList.contains(document.activeElement)) {
+        hideOptions();
+      }
+    }, 120);
   });
 
   if (segment.selectedOptionIndex >= 0) {
@@ -446,7 +473,7 @@ function renderField(segment, onChange) {
   }
 
   wrapper.appendChild(input);
-  wrapper.appendChild(datalist);
+  wrapper.appendChild(optionsList);
   wrapper.appendChild(extras);
   return wrapper;
 }
@@ -646,10 +673,6 @@ function copyProtocol() {
 function shareProtocol(platform) {
   const text = protocolOutput.value.trim();
   if (!text) return;
-  if (platform === "max" && navigator.share) {
-    navigator.share({ text }).catch(() => {});
-    return;
-  }
   const encoded = encodeURIComponent(text);
   const targets = {
     telegram: {
@@ -664,6 +687,16 @@ function shareProtocol(platform) {
 
   const target = targets[platform];
   if (!target) return;
+
+  if (platform === "max" && navigator.share) {
+    navigator
+      .share({ text })
+      .then(() => {})
+      .catch(() => {
+        window.open(target.web, "_blank", "noopener,noreferrer");
+      });
+    return;
+  }
 
   const fallbackTimeout = window.setTimeout(() => {
     window.open(target.web, "_blank", "noopener,noreferrer");

@@ -78,6 +78,7 @@ body {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
+  position: relative;
 }
 
 .inline-field {
@@ -101,6 +102,40 @@ body {
   border: 1px solid #cfd2d8;
   background: #fff;
   font-size: 0.9rem;
+}
+
+.field-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #cfd2d8;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  min-width: 220px;
+  max-width: 420px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.field-option {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: #1d1d1f;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+
+.field-option:hover {
+  background: #eef2fb;
 }
 
 .field-input {
