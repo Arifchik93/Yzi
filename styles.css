@@ -95,6 +95,14 @@ body {
   font-size: 0.9rem;
 }
 
+.field-select-input {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #cfd2d8;
+  background: #fff;
+  font-size: 0.9rem;
+}
+
 .field-input {
   padding: 6px 10px;
   border-radius: 8px;
@@ -201,8 +209,15 @@ textarea {
   }
 
   .field-select,
+  .field-select-input,
   .field-input,
   textarea {
     width: 100%;
+  }
+}
+
+@media (min-width: 769px) {
+  .actions [data-share] {
+    display: none;
   }
 }

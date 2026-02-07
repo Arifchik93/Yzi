@@ -345,17 +345,19 @@ function renderField(segment, onChange) {
   const wrapper = document.createElement("span");
   wrapper.className = "field";
 
-  const select = document.createElement("select");
-  select.className = "field-select";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "field-select-input";
 
-  segment.options.forEach((option, index) => {
+  const datalist = document.createElement("datalist");
+  datalist.id = `field-options-${Math.random().toString(16).slice(2)}`;
+  input.setAttribute("list", datalist.id);
+
+  segment.options.forEach((option) => {
     const optionEl = document.createElement("option");
-    optionEl.value = String(index);
-    optionEl.textContent = option.raw || "—";
-    select.appendChild(optionEl);
+    optionEl.value = option.raw || "—";
+    datalist.appendChild(optionEl);
   });
-
-  select.value = String(segment.selectedOptionIndex);
 
   const extras = document.createElement("span");
   extras.className = "field-extras";
@@ -369,6 +371,9 @@ function renderField(segment, onChange) {
       segment.value = assembleOption(option);
       onChange();
     };
+
+    input.value = option.raw || "";
+    autoSizeInput(input);
 
     option.tokens.forEach((token) => {
       if (token.type === "input") {
@@ -414,21 +419,34 @@ function renderField(segment, onChange) {
     });
   };
 
-  const resizeSelect = () => {
-    const text = select.options[select.selectedIndex]?.textContent || "";
-    select.style.width = `${Math.max(getTextWidth(select, text) + 26, 80)}px`;
+  const syncCustomValue = () => {
+    input.value = segment.value || "";
+    autoSizeInput(input);
   };
 
-  select.addEventListener("change", () => {
-    segment.selectedOptionIndex = Number(select.value);
-    renderExtras();
-    resizeSelect();
+  input.addEventListener("input", () => {
+    const value = input.value;
+    const matchIndex = segment.options.findIndex((option) => option.raw === value);
+    if (matchIndex >= 0) {
+      segment.selectedOptionIndex = matchIndex;
+      renderExtras();
+    } else {
+      segment.selectedOptionIndex = -1;
+      extras.innerHTML = "";
+      segment.value = value;
+      onChange();
+    }
+    autoSizeInput(input);
   });
 
-  renderExtras();
-  resizeSelect();
+  if (segment.selectedOptionIndex >= 0) {
+    renderExtras();
+  } else {
+    syncCustomValue();
+  }
 
-  wrapper.appendChild(select);
+  wrapper.appendChild(input);
+  wrapper.appendChild(datalist);
   wrapper.appendChild(extras);
   return wrapper;
 }
@@ -600,7 +618,8 @@ function resizeTextarea(textarea) {
 
 function autoSizeInput(input) {
   const text = input.value || input.placeholder || "0";
-  const width = Math.max(getTextWidth(input, text) + 24, 70);
+  const extraPadding = getTextWidth(input, "0000");
+  const width = Math.max(getTextWidth(input, text) + extraPadding + 24, 70);
   input.style.width = `${width}px`;
 }
 
@@ -627,6 +646,10 @@ function copyProtocol() {
 function shareProtocol(platform) {
   const text = protocolOutput.value.trim();
   if (!text) return;
+  if (platform === "max" && navigator.share) {
+    navigator.share({ text }).catch(() => {});
+    return;
+  }
   const encoded = encodeURIComponent(text);
   const targets = {
     telegram: {
