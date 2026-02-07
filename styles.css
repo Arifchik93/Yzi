@@ -80,6 +80,13 @@ body {
   flex-wrap: wrap;
 }
 
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .field-select {
   padding: 6px 8px;
   border-radius: 8px;
@@ -188,7 +195,8 @@ textarea {
   }
 
   .field,
-  .field-extras {
+  .field-extras,
+  .inline-field {
     width: 100%;
   }
 
