@@ -17,7 +17,7 @@ body {
 .page {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 32px 24px 48px;
+  padding: 24px 20px 36px;
 }
 
 .page__header h1 {
@@ -32,8 +32,8 @@ body {
 .protocol-picker {
   display: flex;
   align-items: center;
-  gap: 16px;
-  margin: 24px 0;
+  gap: 12px;
+  margin: 20px 0;
   flex-wrap: wrap;
 }
 
@@ -45,13 +45,13 @@ body {
 .form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .form-block {
-  padding: 16px;
+  padding: 14px;
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid #e1e2e6;
 }
 
@@ -63,14 +63,29 @@ body {
 .form-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   line-height: 1.5;
   align-items: center;
 }
 
 .text-segment {
   white-space: pre-wrap;
-  font-size: 0.95rem;
+  font-size: 0.92rem;
+}
+
+.field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.field-select {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #cfd2d8;
+  background: #fff;
+  font-size: 0.9rem;
 }
 
 .field-input {
@@ -78,7 +93,30 @@ body {
   border-radius: 8px;
   border: 1px solid #cfd2d8;
   background: #fff;
-  min-width: 160px;
+  min-width: 90px;
+  font-size: 0.9rem;
+}
+
+.field-input--compact {
+  padding: 4px 8px;
+  min-width: 70px;
+}
+
+.field-input--date {
+  min-width: 135px;
+}
+
+.field-extras {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.calc-output {
+  font-weight: 600;
+  color: #1a73e8;
+  min-width: 48px;
+  display: inline-block;
 }
 
 select {
@@ -109,7 +147,7 @@ button.secondary {
 }
 
 .output {
-  margin-top: 28px;
+  margin-top: 22px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -122,5 +160,41 @@ textarea {
   border: 1px solid #cfd2d8;
   font-family: inherit;
   font-size: 0.95rem;
-  resize: vertical;
+  resize: none;
+}
+
+.actions {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .page {
+    padding: 18px 16px 28px;
+  }
+
+  .page__header h1 {
+    font-size: 1.3rem;
+  }
+
+  .form-block {
+    padding: 12px;
+  }
+
+  .form-row {
+    align-items: flex-start;
+  }
+
+  .field,
+  .field-extras {
+    width: 100%;
+  }
+
+  .field-select,
+  .field-input,
+  textarea {
+    width: 100%;
+  }
 }
