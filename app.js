@@ -508,8 +508,7 @@ function renderInlineSegment(segment, onChange) {
 
   segment.tokens.forEach((token) => {
     if (token.type === "text") {
-      if (!token.value.trim()) {
-        wrapper.appendChild(document.createTextNode(token.value));
+      if (!token.value || !token.value.trim()) {
         return;
       }
       const span = document.createElement("span");
@@ -560,8 +559,7 @@ function renderRow(row, onChange) {
 
   row.segments.forEach((segment) => {
     if (segment.type === "text") {
-      if (!segment.value.trim()) {
-        rowEl.appendChild(document.createTextNode(segment.value));
+      if (!segment.value || !segment.value.trim()) {
         return;
       }
       const span = document.createElement("span");
@@ -706,7 +704,6 @@ function shareProtocol(platform) {
       web: `https://t.me/share/url?text=${encoded}`,
     },
     max: {
-      app: `max://share?text=${encoded}`,
       web: `https://max.ru/share?text=${encoded}`,
     },
   };
@@ -715,10 +712,7 @@ function shareProtocol(platform) {
   if (!target) return;
 
   if (platform === "max") {
-    window.location.href = target.app;
-    window.setTimeout(() => {
-      window.location.href = target.web;
-    }, 500);
+    window.open(target.web, "_blank", "noopener,noreferrer");
     return;
   }
 

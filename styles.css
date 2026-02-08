@@ -253,13 +253,13 @@ textarea {
   }
 
   .form {
-    gap: 6px;
+    gap: 4px;
   }
 
   .form-row {
     align-items: flex-start;
-    gap: 4px;
-    line-height: 1.3;
+    gap: 2px;
+    line-height: 1.2;
   }
 
   .form-title {
@@ -283,6 +283,10 @@ textarea {
   button,
   textarea {
     width: 100%;
+  }
+
+  .field-input--compact {
+    min-width: 0;
   }
 
   .field-input,
