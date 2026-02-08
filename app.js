@@ -20,10 +20,19 @@ const protocolSelect = document.getElementById("protocolSelect");
 const formContainer = document.getElementById("formContainer");
 const protocolOutput = document.getElementById("protocolOutput");
 const loadStatus = document.getElementById("loadStatus");
+const editorModal = document.querySelector("[data-template-editor]");
+const editorTextarea = document.querySelector("[data-template-editor-text]");
+const editorStatus = document.querySelector("[data-template-editor-status]");
+const editorFileLabel = document.querySelector("[data-template-editor-file]");
+const editorApplyButton = document.querySelector("[data-template-editor-apply]");
+const editorSaveButton = document.querySelector("[data-template-editor-save]");
+const editorCloseButtons = document.querySelectorAll("[data-template-editor-close]");
 
 const templateCache = new Map();
 let currentBlocks = [];
 const textMeasureCanvas = document.createElement("canvas");
+let editorTemplateLabel = "";
+const localTemplatePrefix = "local-template-";
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -34,13 +43,21 @@ function populateProtocolOptions() {
   });
 }
 
-async function loadTemplate(protocolId) {
+async function loadTemplate(protocolId, { bustCache = false } = {}) {
   const protocol = protocols.find((item) => item.id === protocolId);
   if (!protocol) return null;
-  if (templateCache.has(protocol.file)) {
+  if (!bustCache) {
+    const localTemplate = readLocalTemplate(protocol.id);
+    if (localTemplate) {
+      templateCache.set(protocol.file, localTemplate);
+      return localTemplate;
+    }
+  }
+  if (!bustCache && templateCache.has(protocol.file)) {
     return templateCache.get(protocol.file);
   }
-  const response = await fetch(protocol.file);
+  const url = bustCache ? `${protocol.file}?v=${Date.now()}` : protocol.file;
+  const response = await fetch(url);
   const data = await response.json();
   templateCache.set(protocol.file, data);
   return data;
@@ -508,6 +525,10 @@ function renderInlineSegment(segment, onChange) {
 
   segment.tokens.forEach((token) => {
     if (token.type === "text") {
+      if (!token.value.trim()) {
+        wrapper.appendChild(document.createTextNode(token.value));
+        return;
+      }
       const span = document.createElement("span");
       span.className = "text-segment";
       span.textContent = token.value;
@@ -556,6 +577,10 @@ function renderRow(row, onChange) {
 
   row.segments.forEach((segment) => {
     if (segment.type === "text") {
+      if (!segment.value.trim()) {
+        rowEl.appendChild(document.createTextNode(segment.value));
+        return;
+      }
       const span = document.createElement("span");
       span.className = "text-segment";
       span.textContent = segment.value;
@@ -634,9 +659,7 @@ function renderBlocks(blocks) {
   });
 }
 
-async function handleProtocolChange() {
-  loadStatus.textContent = "Загрузка...";
-  const template = await loadTemplate(protocolSelect.value);
+function applyTemplate(template) {
   currentBlocks = normalizeBlocks(template).map((block) => ({
     ...block,
     rows: [createRow(block.content)],
@@ -644,6 +667,40 @@ async function handleProtocolChange() {
 
   renderBlocks(currentBlocks);
   updateOutput();
+}
+
+function getCurrentProtocol() {
+  return protocols.find((item) => item.id === protocolSelect.value);
+}
+
+function getLocalTemplateKey(protocolId) {
+  return `${localTemplatePrefix}${protocolId}`;
+}
+
+function readLocalTemplate(protocolId) {
+  const raw = localStorage.getItem(getLocalTemplateKey(protocolId));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed;
+  } catch (error) {
+    localStorage.removeItem(getLocalTemplateKey(protocolId));
+    return null;
+  }
+}
+
+function writeLocalTemplate(protocolId, text) {
+  localStorage.setItem(getLocalTemplateKey(protocolId), text);
+}
+
+function clearLocalTemplate(protocolId) {
+  localStorage.removeItem(getLocalTemplateKey(protocolId));
+}
+
+async function handleProtocolChange() {
+  loadStatus.textContent = "Загрузка...";
+  const template = await loadTemplate(protocolSelect.value);
+  applyTemplate(template);
   loadStatus.textContent = "Готово";
 }
 
@@ -658,9 +715,13 @@ function resizeTextarea(textarea) {
 }
 
 function autoSizeInput(input) {
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    input.style.width = "";
+    return;
+  }
   const text = input.value || input.placeholder || "0";
   const extraPadding = getTextWidth(input, "0000");
-  const width = Math.max(getTextWidth(input, text) + extraPadding + 24, 70);
+  const width = getTextWidth(input, text) + extraPadding + 24;
   input.style.width = `${width}px`;
 }
 
@@ -704,6 +765,9 @@ function shareProtocol(platform) {
 
   if (platform === "max") {
     window.location.href = target.app;
+    window.setTimeout(() => {
+      window.location.href = target.web;
+    }, 500);
     return;
   }
 
@@ -721,6 +785,165 @@ document.addEventListener("click", (event) => {
   if (target.matches("[data-share]")) {
     shareProtocol(target.dataset.share);
   }
+  if (target.matches("[data-template-action]")) {
+    handleTemplateAction(target.dataset.templateAction);
+  }
 });
 
 protocolOutput.addEventListener("input", () => resizeTextarea(protocolOutput));
+
+async function handleTemplateAction(action) {
+  const protocol = getCurrentProtocol();
+  if (!protocol) return;
+
+  if (action === "refresh") {
+    loadStatus.textContent = "Обновление...";
+    clearLocalTemplate(protocol.id);
+    templateCache.delete(protocol.file);
+    const template = await loadTemplate(protocol.id, { bustCache: true });
+    applyTemplate(template);
+    loadStatus.textContent = "Готово";
+    return;
+  }
+
+  if (action === "edit") {
+    openTemplateEditor();
+    return;
+  }
+
+  if (action === "download") {
+    const url = `${protocol.file}?v=${Date.now()}`;
+    const response = await fetch(url);
+    const text = await response.text();
+    const blob = new Blob([text], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = protocol.file;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  }
+}
+
+function setEditorStatus(message, isError = false) {
+  if (!editorStatus) return;
+  editorStatus.textContent = message;
+  editorStatus.style.color = isError ? "#b3261e" : "#0061a8";
+}
+
+function showEditor() {
+  if (!editorModal) return;
+  editorModal.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function hideEditor() {
+  if (!editorModal) return;
+  editorModal.hidden = true;
+  document.body.style.overflow = "";
+  setEditorStatus("");
+}
+
+function setEditorContent(text, label) {
+  if (editorTextarea) {
+    editorTextarea.value = text;
+  }
+  editorTemplateLabel = label || "";
+  if (editorFileLabel) {
+    editorFileLabel.textContent = editorTemplateLabel
+      ? `Шаблон: ${editorTemplateLabel}`
+      : "Шаблон из памяти браузера";
+  }
+  setEditorStatus("");
+}
+
+async function openTemplateEditor() {
+  const protocol = getCurrentProtocol();
+  if (!protocol) return;
+
+  const cached = templateCache.get(protocol.file) ?? (await loadTemplate(protocol.id));
+  if (!cached) {
+    setEditorStatus("Шаблон не найден.", true);
+    return;
+  }
+  const text = JSON.stringify(cached, null, 2);
+  setEditorContent(text, protocol.name);
+  setEditorStatus("Правки сохраняются в память браузера.");
+  showEditor();
+}
+
+function applyEditorTemplate() {
+  const protocol = getCurrentProtocol();
+  if (!protocol) return;
+  const text = editorTextarea?.value ?? "";
+  if (!text.trim()) {
+    setEditorStatus("Файл пустой.", true);
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    setEditorStatus("Ошибка JSON: проверьте формат файла.", true);
+    return;
+  }
+
+  if (!parsed || !Array.isArray(parsed.blocks)) {
+    setEditorStatus("Файл не содержит корректный шаблон.", true);
+    return;
+  }
+
+  templateCache.set(protocol.file, parsed);
+  writeLocalTemplate(protocol.id, text);
+  applyTemplate(parsed);
+  loadStatus.textContent = "Локальные правки применены";
+  setEditorStatus("Шаблон применён.");
+}
+
+async function saveEditorTemplate() {
+  const protocol = getCurrentProtocol();
+  if (!protocol) return;
+  const text = editorTextarea?.value ?? "";
+  if (!text.trim()) {
+    setEditorStatus("Нечего сохранять: файл пустой.", true);
+    return;
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    setEditorStatus("Ошибка JSON: проверьте формат файла.", true);
+    return;
+  }
+
+  if (!parsed || !Array.isArray(parsed.blocks)) {
+    setEditorStatus("Файл не содержит корректный шаблон.", true);
+    return;
+  }
+
+  templateCache.set(protocol.file, parsed);
+  writeLocalTemplate(protocol.id, text);
+  setEditorStatus("Сохранено в памяти браузера.");
+  loadStatus.textContent = "Локальные правки сохранены";
+}
+
+editorCloseButtons.forEach((button) => {
+  button.addEventListener("click", () => hideEditor());
+});
+
+if (editorApplyButton) {
+  editorApplyButton.addEventListener("click", () => applyEditorTemplate());
+}
+
+if (editorSaveButton) {
+  editorSaveButton.addEventListener("click", () => saveEditorTemplate());
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && editorModal && !editorModal.hidden) {
+    hideEditor();
+  }
+});

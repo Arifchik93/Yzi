@@ -18,6 +18,11 @@
     <section class="protocol-picker">
       <label for="protocolSelect">Шаблон протокола</label>
       <select id="protocolSelect"></select>
+      <div class="protocol-actions">
+        <button type="button" class="icon-button" data-template-action="refresh" aria-label="Обновить шаблон" title="Обновить шаблон">⟳</button>
+        <button type="button" class="icon-button" data-template-action="edit" aria-label="Открыть локальный шаблон" title="Открыть локальный шаблон">✎</button>
+        <button type="button" class="icon-button" data-template-action="download" aria-label="Скачать локальную версию" title="Скачать локальную версию">⬇</button>
+      </div>
       <span id="loadStatus" class="status">Загрузка...</span>
     </section>
 
@@ -34,6 +39,23 @@
       <button type="button" data-copy>Быстро скопировать</button>
       <button type="button" class="secondary" data-share="telegram">Отправить в Telegram</button>
       <button type="button" class="secondary" data-share="max">Отправить в Max</button>
+    </section>
+
+    <section class="modal" data-template-editor hidden>
+      <div class="modal__backdrop" data-template-editor-close></div>
+      <div class="modal__content" role="dialog" aria-modal="true" aria-labelledby="templateEditorTitle">
+        <header class="modal__header">
+          <h2 id="templateEditorTitle">Локальный шаблон</h2>
+          <button type="button" class="icon-button" data-template-editor-close aria-label="Закрыть редактор">✕</button>
+        </header>
+        <p class="modal__subtitle" data-template-editor-file>Шаблон из памяти браузера</p>
+        <textarea rows="14" class="modal__textarea" data-template-editor-text></textarea>
+        <div class="modal__status" data-template-editor-status></div>
+        <div class="modal__actions">
+          <button type="button" class="secondary" data-template-editor-apply>Применить</button>
+          <button type="button" data-template-editor-save>Сохранить в браузере</button>
+        </div>
+      </div>
     </section>
   </main>
 
