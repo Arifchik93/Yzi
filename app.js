@@ -27,13 +27,11 @@ const editorFileLabel = document.querySelector("[data-template-editor-file]");
 const editorApplyButton = document.querySelector("[data-template-editor-apply]");
 const editorSaveButton = document.querySelector("[data-template-editor-save]");
 const editorCloseButtons = document.querySelectorAll("[data-template-editor-close]");
-const templateFileInput = document.getElementById("templateFileInput");
 
 const templateCache = new Map();
 let currentBlocks = [];
 const textMeasureCanvas = document.createElement("canvas");
-let editorFileHandle = null;
-let editorFileName = "";
+let editorTemplateLabel = "";
 const localTemplatePrefix = "local-template-";
 
 function populateProtocolOptions() {
@@ -847,63 +845,32 @@ function hideEditor() {
   setEditorStatus("");
 }
 
-function setEditorContent(text, fileName) {
+function setEditorContent(text, label) {
   if (editorTextarea) {
     editorTextarea.value = text;
   }
-  editorFileName = fileName || "";
+  editorTemplateLabel = label || "";
   if (editorFileLabel) {
-    editorFileLabel.textContent = editorFileName
-      ? `Файл: ${editorFileName}`
-      : "Файл не выбран";
+    editorFileLabel.textContent = editorTemplateLabel
+      ? `Шаблон: ${editorTemplateLabel}`
+      : "Шаблон из памяти браузера";
   }
   setEditorStatus("");
-}
-
-async function readTemplateFile(file) {
-  return file.text();
 }
 
 async function openTemplateEditor() {
   const protocol = getCurrentProtocol();
   if (!protocol) return;
 
-  editorFileHandle = null;
-  editorFileName = protocol.file;
-
-  if (window.showOpenFilePicker) {
-    try {
-      const [handle] = await window.showOpenFilePicker({
-        multiple: false,
-        types: [
-          {
-            description: "JSON-шаблон",
-            accept: {
-              "application/json": [".json", ".txt"],
-              "text/plain": [".txt"],
-            },
-          },
-        ],
-      });
-      if (!handle) return;
-      editorFileHandle = handle;
-      const file = await handle.getFile();
-      const text = await readTemplateFile(file);
-      setEditorContent(text, file.name);
-      showEditor();
-      return;
-    } catch (error) {
-      if (error?.name === "AbortError") {
-        return;
-      }
-      setEditorStatus("Не удалось открыть файл.", true);
-    }
+  const cached = templateCache.get(protocol.file) ?? (await loadTemplate(protocol.id));
+  if (!cached) {
+    setEditorStatus("Шаблон не найден.", true);
+    return;
   }
-
-  if (templateFileInput) {
-    templateFileInput.value = "";
-    templateFileInput.click();
-  }
+  const text = JSON.stringify(cached, null, 2);
+  setEditorContent(text, protocol.name);
+  setEditorStatus("Правки сохраняются в память браузера.");
+  showEditor();
 }
 
 function applyEditorTemplate() {
@@ -936,45 +903,31 @@ function applyEditorTemplate() {
 }
 
 async function saveEditorTemplate() {
+  const protocol = getCurrentProtocol();
+  if (!protocol) return;
   const text = editorTextarea?.value ?? "";
   if (!text.trim()) {
     setEditorStatus("Нечего сохранять: файл пустой.", true);
     return;
   }
 
-  if (editorFileHandle?.createWritable) {
-    try {
-      const writable = await editorFileHandle.createWritable();
-      await writable.write(text);
-      await writable.close();
-      setEditorStatus("Сохранено в файл.");
-      return;
-    } catch (error) {
-      setEditorStatus("Не удалось сохранить файл.", true);
-    }
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    setEditorStatus("Ошибка JSON: проверьте формат файла.", true);
+    return;
   }
 
-  const fallbackName = editorFileName || "template.json";
-  const blob = new Blob([text], { type: "application/json" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = fallbackName;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(link.href);
-  setEditorStatus("Файл скачан вместо сохранения.");
-}
+  if (!parsed || !Array.isArray(parsed.blocks)) {
+    setEditorStatus("Файл не содержит корректный шаблон.", true);
+    return;
+  }
 
-if (templateFileInput) {
-  templateFileInput.addEventListener("change", async () => {
-    const file = templateFileInput.files?.[0];
-    if (!file) return;
-    editorFileHandle = null;
-    const text = await readTemplateFile(file);
-    setEditorContent(text, file.name);
-    showEditor();
-  });
+  templateCache.set(protocol.file, parsed);
+  writeLocalTemplate(protocol.id, text);
+  setEditorStatus("Сохранено в памяти браузера.");
+  loadStatus.textContent = "Локальные правки сохранены";
 }
 
 editorCloseButtons.forEach((button) => {

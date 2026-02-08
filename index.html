@@ -48,17 +48,15 @@
           <h2 id="templateEditorTitle">Локальный шаблон</h2>
           <button type="button" class="icon-button" data-template-editor-close aria-label="Закрыть редактор">✕</button>
         </header>
-        <p class="modal__subtitle" data-template-editor-file>Файл не выбран</p>
+        <p class="modal__subtitle" data-template-editor-file>Шаблон из памяти браузера</p>
         <textarea rows="14" class="modal__textarea" data-template-editor-text></textarea>
         <div class="modal__status" data-template-editor-status></div>
         <div class="modal__actions">
           <button type="button" class="secondary" data-template-editor-apply>Применить</button>
-          <button type="button" data-template-editor-save>Сохранить в файл</button>
+          <button type="button" data-template-editor-save>Сохранить в браузере</button>
         </div>
       </div>
     </section>
-
-    <input type="file" id="templateFileInput" accept=".txt,.json,application/json" hidden />
   </main>
 
   <script src="app.js"></script>
