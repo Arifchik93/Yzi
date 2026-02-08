@@ -20,10 +20,16 @@ const protocolSelect = document.getElementById("protocolSelect");
 const formContainer = document.getElementById("formContainer");
 const protocolOutput = document.getElementById("protocolOutput");
 const loadStatus = document.getElementById("loadStatus");
+const templateEditor = document.getElementById("templateEditor");
+const templateEditorTextarea = document.getElementById(
+  "templateEditorTextarea",
+);
+const templateEditorStatus = document.getElementById("templateEditorStatus");
 
 const templateCache = new Map();
 let currentBlocks = [];
 const textMeasureCanvas = document.createElement("canvas");
+const localTemplatePrefix = "local-template:";
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -34,15 +40,47 @@ function populateProtocolOptions() {
   });
 }
 
-async function loadTemplate(protocolId, { bustCache = false } = {}) {
+function getLocalTemplateText(file) {
+  return localStorage.getItem(`${localTemplatePrefix}${file}`);
+}
+
+function setLocalTemplateText(file, text) {
+  localStorage.setItem(`${localTemplatePrefix}${file}`, text);
+}
+
+function parseTemplateText(text) {
+  return JSON.parse(text);
+}
+
+async function fetchTemplateText(file, { bustCache = false } = {}) {
+  const url = bustCache ? `${file}?v=${Date.now()}` : file;
+  const response = await fetch(url);
+  return response.text();
+}
+
+async function loadTemplate(
+  protocolId,
+  { bustCache = false, preferLocal = true } = {},
+) {
   const protocol = protocols.find((item) => item.id === protocolId);
   if (!protocol) return null;
   if (!bustCache && templateCache.has(protocol.file)) {
     return templateCache.get(protocol.file);
   }
-  const url = bustCache ? `${protocol.file}?v=${Date.now()}` : protocol.file;
-  const response = await fetch(url);
-  const data = await response.json();
+  if (preferLocal) {
+    const localText = getLocalTemplateText(protocol.file);
+    if (localText) {
+      try {
+        const localData = parseTemplateText(localText);
+        templateCache.set(protocol.file, localData);
+        return localData;
+      } catch (error) {
+        console.warn("Ошибка чтения локального шаблона:", error);
+      }
+    }
+  }
+  const text = await fetchTemplateText(protocol.file, { bustCache });
+  const data = parseTemplateText(text);
   templateCache.set(protocol.file, data);
   return data;
 }
@@ -759,21 +797,24 @@ async function handleTemplateAction(action) {
   if (action === "refresh") {
     loadStatus.textContent = "Обновление...";
     templateCache.delete(protocol.file);
-    const template = await loadTemplate(protocol.id, { bustCache: true });
+    const text = await fetchTemplateText(protocol.file, { bustCache: true });
+    const template = parseTemplateText(text);
+    setLocalTemplateText(protocol.file, text);
+    templateCache.set(protocol.file, template);
     applyTemplate(template);
     loadStatus.textContent = "Готово";
     return;
   }
 
   if (action === "edit") {
-    window.open(protocol.file, "_blank", "noopener");
+    await openTemplateEditor(protocol);
     return;
   }
 
   if (action === "download") {
-    const url = `${protocol.file}?v=${Date.now()}`;
-    const response = await fetch(url);
-    const text = await response.text();
+    const localText = getLocalTemplateText(protocol.file);
+    const text =
+      localText ?? (await fetchTemplateText(protocol.file, { bustCache: true }));
     const blob = new Blob([text], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -784,3 +825,50 @@ async function handleTemplateAction(action) {
     URL.revokeObjectURL(link.href);
   }
 }
+
+function openEditorModal() {
+  templateEditor.classList.add("is-open");
+  templateEditor.setAttribute("aria-hidden", "false");
+}
+
+function closeEditorModal() {
+  templateEditor.classList.remove("is-open");
+  templateEditor.setAttribute("aria-hidden", "true");
+  templateEditorStatus.textContent = "";
+}
+
+async function openTemplateEditor(protocol) {
+  const localText = getLocalTemplateText(protocol.file);
+  const text =
+    localText ?? (await fetchTemplateText(protocol.file, { bustCache: true }));
+  templateEditorTextarea.value = text;
+  templateEditorTextarea.dataset.protocolFile = protocol.file;
+  openEditorModal();
+}
+
+templateEditor.addEventListener("click", (event) => {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.matches("[data-editor-close]")) {
+    closeEditorModal();
+  }
+  if (target.matches("[data-editor-save]")) {
+    const file = templateEditorTextarea.dataset.protocolFile;
+    if (!file) return;
+    try {
+      const text = templateEditorTextarea.value.trim();
+      const template = parseTemplateText(text);
+      setLocalTemplateText(file, text);
+      templateCache.set(file, template);
+      const currentProtocol = getCurrentProtocol();
+      if (currentProtocol?.file === file) {
+        applyTemplate(template);
+      }
+      templateEditorStatus.textContent = "Локальный шаблон сохранён.";
+      closeEditorModal();
+    } catch (error) {
+      templateEditorStatus.textContent =
+        "Ошибка: шаблон должен быть валидным JSON.";
+    }
+  }
+});

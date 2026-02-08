@@ -42,6 +42,27 @@
     </section>
   </main>
 
+  <div class="modal" id="templateEditor" aria-hidden="true">
+    <div class="modal__backdrop" data-editor-close></div>
+    <div class="modal__content" role="dialog" aria-modal="true" aria-labelledby="templateEditorTitle">
+      <div class="modal__header">
+        <h2 id="templateEditorTitle">Редактор локального шаблона</h2>
+        <button type="button" class="icon-button" data-editor-close aria-label="Закрыть">✕</button>
+      </div>
+      <p class="modal__subtitle">
+        Измените JSON-шаблон и нажмите «Сохранить», чтобы применить локальную версию.
+      </p>
+      <textarea id="templateEditorTextarea" rows="14" class="modal__textarea"></textarea>
+      <div class="modal__footer">
+        <span id="templateEditorStatus" class="status"></span>
+        <div class="modal__actions">
+          <button type="button" class="secondary" data-editor-close>Отмена</button>
+          <button type="button" data-editor-save>Сохранить</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
