@@ -9,6 +9,11 @@ const protocols = [
     name: "УЗИ лимфатических узлов",
     file: "LymphNodes.txt",
   },
+  {
+    id: "bladderprostate",
+    name: "УЗИ мочевого пузыря и предстательной железы",
+    file: "bladderprostate.txt",
+  },
 ];
 
 const protocolSelect = document.getElementById("protocolSelect");
@@ -18,6 +23,7 @@ const loadStatus = document.getElementById("loadStatus");
 
 const templateCache = new Map();
 let currentBlocks = [];
+const textMeasureCanvas = document.createElement("canvas");
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -60,7 +66,7 @@ function parseSegments(text) {
 
   const parseOptionTokens = (rawOption) => {
     const tokens = [];
-    const placeholderRegex = /__|<[^>]+>/g;
+    const placeholderRegex = /__|_ _|<[^>]+>/g;
     let lastTokenIndex = 0;
     let placeholderMatch;
     let inputIndex = 0;
@@ -85,11 +91,30 @@ function parseSegments(text) {
           inputIndex: inputIndex++,
           placeholder: "число",
         });
+      } else if (tokenValue === "_ _") {
+        tokens.push({
+          type: "input",
+          inputType: "text",
+          inputIndex: inputIndex++,
+          placeholder: "текст",
+        });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();
         const normalized = inner.toLowerCase().replace(/\s+/g, " ");
+        const normalizedNumeric = normalized.replace(",", ".");
 
-        if (normalized.includes("дд.мм.гггг")) {
+        if (
+          normalizedNumeric.includes("0.52") ||
+          normalized.includes("0,52") ||
+          normalized.includes("объем") ||
+          normalized.includes("объём") ||
+          normalized.includes("эллип")
+        ) {
+          tokens.push({
+            type: "calc",
+            formula: "ellipse",
+          });
+        } else if (normalized.includes("дд.мм.гггг")) {
           tokens.push({
             type: "input",
             inputType: "date",
@@ -102,11 +127,6 @@ function parseSegments(text) {
             inputType: "number",
             inputIndex: inputIndex++,
             placeholder: "число",
-          });
-        } else if (normalized.includes("0.52") || normalized.includes("объём") || normalized.includes("эллип")) {
-          tokens.push({
-            type: "calc",
-            formula: "ellipse",
           });
         } else {
           pushText(tokenValue);
@@ -127,9 +147,97 @@ function parseSegments(text) {
     };
   };
 
+  const parseInlineTokens = (rawText) => {
+    const tokens = [];
+    const placeholderRegex = /__|_ _|<[^>]+>/g;
+    let lastTokenIndex = 0;
+    let placeholderMatch;
+    let inputIndex = 0;
+
+    const pushText = (value) => {
+      if (!value) return;
+      tokens.push({ type: "text", value });
+    };
+
+    while ((placeholderMatch = placeholderRegex.exec(rawText))) {
+      const tokenStart = placeholderMatch.index;
+      const tokenValue = placeholderMatch[0];
+
+      if (tokenStart > lastTokenIndex) {
+        pushText(rawText.slice(lastTokenIndex, tokenStart));
+      }
+
+      if (tokenValue === "__") {
+        tokens.push({
+          type: "input",
+          inputType: "number",
+          inputIndex: inputIndex++,
+          placeholder: "число",
+        });
+      } else if (tokenValue === "_ _") {
+        tokens.push({
+          type: "input",
+          inputType: "text",
+          inputIndex: inputIndex++,
+          placeholder: "текст",
+        });
+      } else if (tokenValue.startsWith("<")) {
+        const inner = tokenValue.slice(1, -1).trim();
+        const normalized = inner.toLowerCase().replace(/\s+/g, " ");
+        const normalizedNumeric = normalized.replace(",", ".");
+
+        if (
+          normalizedNumeric.includes("0.52") ||
+          normalized.includes("0,52") ||
+          normalized.includes("объем") ||
+          normalized.includes("объём") ||
+          normalized.includes("эллип")
+        ) {
+          tokens.push({
+            type: "calc",
+            formula: "ellipse",
+          });
+        } else if (normalized.includes("дд.мм.гггг")) {
+          tokens.push({
+            type: "input",
+            inputType: "date",
+            inputIndex: inputIndex++,
+            placeholder: "дд.мм.гггг",
+          });
+        } else if (normalized.includes("число")) {
+          tokens.push({
+            type: "input",
+            inputType: "number",
+            inputIndex: inputIndex++,
+            placeholder: "число",
+          });
+        } else {
+          pushText(tokenValue);
+        }
+      }
+
+      lastTokenIndex = tokenStart + tokenValue.length;
+    }
+
+    if (lastTokenIndex < rawText.length) {
+      pushText(rawText.slice(lastTokenIndex));
+    }
+
+    const hasInteractive = tokens.some((token) => token.type !== "text");
+
+    return hasInteractive
+      ? {
+          type: "inline",
+          tokens,
+          inputValues: Array(inputIndex).fill(""),
+        }
+      : { type: "text", value: rawText };
+  };
+
   while ((match = regex.exec(text))) {
     if (match.index > lastIndex) {
-      segments.push({ type: "text", value: text.slice(lastIndex, match.index) });
+      const inlineSegment = parseInlineTokens(text.slice(lastIndex, match.index));
+      segments.push(inlineSegment);
     }
 
     const raw = match[0].slice(1, -1);
@@ -153,7 +261,7 @@ function parseSegments(text) {
   }
 
   if (lastIndex < text.length) {
-    segments.push({ type: "text", value: text.slice(lastIndex) });
+    segments.push(parseInlineTokens(text.slice(lastIndex)));
   }
 
   return segments;
@@ -170,6 +278,9 @@ function assembleRow(row) {
     .map((segment) => {
       if (segment.type === "text") {
         return segment.value;
+      }
+      if (segment.type === "inline") {
+        return assembleInlineSegment(segment);
       }
       return segment.value ?? "";
     })
@@ -209,6 +320,24 @@ function assembleOption(option) {
     .join("");
 }
 
+function assembleInlineSegment(segment) {
+  return segment.tokens
+    .map((token) => {
+      if (token.type === "text") {
+        return token.value;
+      }
+      if (token.type === "input") {
+        const value = segment.inputValues[token.inputIndex] ?? "";
+        return token.inputType === "date" ? formatDate(value) : value;
+      }
+      if (token.type === "calc") {
+        return computeEllipseVolume(segment.inputValues);
+      }
+      return "";
+    })
+    .join("");
+}
+
 function updateOutput() {
   const text = currentBlocks
     .map((block) => {
@@ -230,17 +359,25 @@ function renderField(segment, onChange) {
   const wrapper = document.createElement("span");
   wrapper.className = "field";
 
-  const select = document.createElement("select");
-  select.className = "field-select";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "field-select-input";
+
+  const optionsList = document.createElement("div");
+  optionsList.className = "field-options";
 
   segment.options.forEach((option, index) => {
-    const optionEl = document.createElement("option");
-    optionEl.value = String(index);
-    optionEl.textContent = option.raw || "—";
-    select.appendChild(optionEl);
+    const optionButton = document.createElement("button");
+    optionButton.type = "button";
+    optionButton.className = "field-option";
+    optionButton.textContent = option.raw || "—";
+    optionButton.addEventListener("click", () => {
+      segment.selectedOptionIndex = index;
+      renderExtras();
+      hideOptions();
+    });
+    optionsList.appendChild(optionButton);
   });
-
-  select.value = String(segment.selectedOptionIndex);
 
   const extras = document.createElement("span");
   extras.className = "field-extras";
@@ -254,6 +391,9 @@ function renderField(segment, onChange) {
       segment.value = assembleOption(option);
       onChange();
     };
+
+    input.value = option.raw || "";
+    autoSizeInput(input);
 
     option.tokens.forEach((token) => {
       if (token.type === "input") {
@@ -299,23 +439,114 @@ function renderField(segment, onChange) {
     });
   };
 
-  const resizeSelect = () => {
-    const text = select.options[select.selectedIndex]?.textContent || "";
-    const size = Math.min(Math.max(text.length, 6), 40);
-    select.style.width = `${size + 2}ch`;
+  const syncCustomValue = () => {
+    input.value = segment.value || "";
+    autoSizeInput(input);
   };
 
-  select.addEventListener("change", () => {
-    segment.selectedOptionIndex = Number(select.value);
-    renderExtras();
-    resizeSelect();
+  const showOptions = () => {
+    optionsList.style.display = "flex";
+  };
+
+  const hideOptions = () => {
+    optionsList.style.display = "none";
+  };
+
+  input.addEventListener("input", () => {
+    const value = input.value;
+    const matchIndex = segment.options.findIndex((option) => option.raw === value);
+    if (matchIndex >= 0) {
+      segment.selectedOptionIndex = matchIndex;
+      renderExtras();
+    } else {
+      segment.selectedOptionIndex = -1;
+      extras.innerHTML = "";
+      segment.value = value;
+      onChange();
+    }
+    autoSizeInput(input);
+    showOptions();
   });
 
-  renderExtras();
-  resizeSelect();
+  input.addEventListener("focus", () => {
+    showOptions();
+  });
 
-  wrapper.appendChild(select);
+  input.addEventListener("blur", () => {
+    window.setTimeout(() => {
+      if (!optionsList.contains(document.activeElement)) {
+        hideOptions();
+      }
+    }, 120);
+  });
+
+  if (segment.selectedOptionIndex >= 0) {
+    renderExtras();
+  } else {
+    syncCustomValue();
+  }
+
+  wrapper.appendChild(input);
+  wrapper.appendChild(optionsList);
   wrapper.appendChild(extras);
+  return wrapper;
+}
+
+function renderInlineSegment(segment, onChange) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "inline-field";
+
+  const updateSegmentValue = () => {
+    onChange();
+  };
+
+  const updateCalcOutputs = () => {
+    wrapper.querySelectorAll(".calc-output").forEach((el) => {
+      el.textContent = computeEllipseVolume(segment.inputValues);
+    });
+  };
+
+  segment.tokens.forEach((token) => {
+    if (token.type === "text") {
+      const span = document.createElement("span");
+      span.className = "text-segment";
+      span.textContent = token.value;
+      wrapper.appendChild(span);
+      return;
+    }
+
+    if (token.type === "input") {
+      const input = document.createElement("input");
+      input.type = token.inputType;
+      input.value = segment.inputValues[token.inputIndex] ?? "";
+      input.placeholder = token.placeholder;
+      input.className = "field-input field-input--compact";
+      if (token.inputType === "number") {
+        input.inputMode = "decimal";
+        input.step = "any";
+      }
+      if (token.inputType === "date") {
+        input.classList.add("field-input--date");
+      }
+      autoSizeInput(input);
+      input.addEventListener("input", (event) => {
+        segment.inputValues[token.inputIndex] = event.target.value;
+        autoSizeInput(input);
+        updateSegmentValue();
+        updateCalcOutputs();
+      });
+      wrapper.appendChild(input);
+      return;
+    }
+
+    if (token.type === "calc") {
+      const output = document.createElement("span");
+      output.className = "calc-output";
+      output.textContent = computeEllipseVolume(segment.inputValues);
+      wrapper.appendChild(output);
+    }
+  });
+
   return wrapper;
 }
 
@@ -329,6 +560,11 @@ function renderRow(row, onChange) {
       span.className = "text-segment";
       span.textContent = segment.value;
       rowEl.appendChild(span);
+      return;
+    }
+
+    if (segment.type === "inline") {
+      rowEl.appendChild(renderInlineSegment(segment, onChange));
       return;
     }
 
@@ -422,8 +658,18 @@ function resizeTextarea(textarea) {
 }
 
 function autoSizeInput(input) {
-  const valueLength = input.value.length || input.placeholder.length || 1;
-  input.style.width = `${Math.min(Math.max(valueLength + 1, 4), 20)}ch`;
+  const text = input.value || input.placeholder || "0";
+  const extraPadding = getTextWidth(input, "0000");
+  const width = Math.max(getTextWidth(input, text) + extraPadding + 24, 70);
+  input.style.width = `${width}px`;
+}
+
+function getTextWidth(el, text) {
+  const context = textMeasureCanvas.getContext("2d");
+  if (!context) return text.length * 8;
+  const style = getComputedStyle(el);
+  context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  return context.measureText(text).width;
 }
 
 function copyProtocol() {
@@ -442,18 +688,27 @@ function shareProtocol(platform) {
   const text = protocolOutput.value.trim();
   if (!text) return;
   const encoded = encodeURIComponent(text);
-  let url = "";
+  const targets = {
+    telegram: {
+      app: `tg://msg?text=${encoded}`,
+      web: `https://t.me/share/url?text=${encoded}`,
+    },
+    max: {
+      app: `max://share?text=${encoded}`,
+      web: `https://max.ru/share?text=${encoded}`,
+    },
+  };
 
-  if (platform === "telegram") {
-    url = `https://t.me/share/url?text=${encoded}`;
-  }
+  const target = targets[platform];
+  if (!target) return;
 
   if (platform === "max") {
-    url = `https://max.ru/share?text=${encoded}`;
+    window.location.href = target.app;
+    return;
   }
 
-  if (url) {
-    window.open(url, "_blank", "noopener,noreferrer");
+  if (platform === "telegram") {
+    window.location.href = target.app;
   }
 }
 

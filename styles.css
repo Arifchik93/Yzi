@@ -71,9 +71,18 @@ body {
 .text-segment {
   white-space: pre-wrap;
   font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.inline-field {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -86,6 +95,48 @@ body {
   border: 1px solid #cfd2d8;
   background: #fff;
   font-size: 0.9rem;
+}
+
+.field-select-input {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid #cfd2d8;
+  background: #fff;
+  font-size: 0.9rem;
+}
+
+.field-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid #cfd2d8;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  min-width: 220px;
+  max-width: 420px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.field-option {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  color: #1d1d1f;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+}
+
+.field-option:hover {
+  background: #eef2fb;
 }
 
 .field-input {
@@ -153,6 +204,10 @@ button.secondary {
   gap: 10px;
 }
 
+.output label {
+  font-weight: 600;
+}
+
 textarea {
   width: 100%;
   padding: 14px;
@@ -160,6 +215,7 @@ textarea {
   border: 1px solid #cfd2d8;
   font-family: inherit;
   font-size: 0.95rem;
+  font-weight: 400;
   resize: none;
 }
 
@@ -172,29 +228,62 @@ textarea {
 
 @media (max-width: 768px) {
   .page {
-    padding: 18px 16px 28px;
+    padding: 12px 12px 20px;
   }
 
   .page__header h1 {
-    font-size: 1.3rem;
+    font-size: 1.4rem;
+  }
+
+  .page__subtitle {
+    font-size: 1rem;
   }
 
   .form-block {
-    padding: 12px;
+    padding: 10px;
+  }
+
+  .form {
+    gap: 8px;
   }
 
   .form-row {
     align-items: flex-start;
+    gap: 2px;
   }
 
   .field,
-  .field-extras {
+  .field-extras,
+  .inline-field {
     width: 100%;
   }
 
   .field-select,
+  .field-select-input,
   .field-input,
+  button,
   textarea {
     width: 100%;
+  }
+
+  .field-select-input,
+  .field-input,
+  textarea {
+    font-size: 1rem;
+  }
+
+  .actions {
+    gap: 6px;
+  }
+
+  button {
+    padding: 10px 12px;
+    font-size: 1rem;
+  }
+}
+
+@media (min-width: 769px) {
+  .actions [data-share] {
+    display: none;
   }
 }
