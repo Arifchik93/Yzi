@@ -508,6 +508,10 @@ function renderInlineSegment(segment, onChange) {
 
   segment.tokens.forEach((token) => {
     if (token.type === "text") {
+      if (!token.value.trim()) {
+        wrapper.appendChild(document.createTextNode(token.value));
+        return;
+      }
       const span = document.createElement("span");
       span.className = "text-segment";
       span.textContent = token.value;
@@ -556,6 +560,10 @@ function renderRow(row, onChange) {
 
   row.segments.forEach((segment) => {
     if (segment.type === "text") {
+      if (!segment.value.trim()) {
+        rowEl.appendChild(document.createTextNode(segment.value));
+        return;
+      }
       const span = document.createElement("span");
       span.className = "text-segment";
       span.textContent = segment.value;
@@ -658,9 +666,13 @@ function resizeTextarea(textarea) {
 }
 
 function autoSizeInput(input) {
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    input.style.width = "";
+    return;
+  }
   const text = input.value || input.placeholder || "0";
   const extraPadding = getTextWidth(input, "0000");
-  const width = Math.max(getTextWidth(input, text) + extraPadding + 24, 70);
+  const width = getTextWidth(input, text) + extraPadding + 24;
   input.style.width = `${width}px`;
 }
 
@@ -704,6 +716,9 @@ function shareProtocol(platform) {
 
   if (platform === "max") {
     window.location.href = target.app;
+    window.setTimeout(() => {
+      window.location.href = target.web;
+    }, 500);
     return;
   }
 
