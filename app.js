@@ -34,13 +34,14 @@ function populateProtocolOptions() {
   });
 }
 
-async function loadTemplate(protocolId) {
+async function loadTemplate(protocolId, { bustCache = false } = {}) {
   const protocol = protocols.find((item) => item.id === protocolId);
   if (!protocol) return null;
-  if (templateCache.has(protocol.file)) {
+  if (!bustCache && templateCache.has(protocol.file)) {
     return templateCache.get(protocol.file);
   }
-  const response = await fetch(protocol.file);
+  const url = bustCache ? `${protocol.file}?v=${Date.now()}` : protocol.file;
+  const response = await fetch(url);
   const data = await response.json();
   templateCache.set(protocol.file, data);
   return data;
@@ -508,6 +509,10 @@ function renderInlineSegment(segment, onChange) {
 
   segment.tokens.forEach((token) => {
     if (token.type === "text") {
+      if (!token.value.trim()) {
+        wrapper.appendChild(document.createTextNode(token.value));
+        return;
+      }
       const span = document.createElement("span");
       span.className = "text-segment";
       span.textContent = token.value;
@@ -556,6 +561,10 @@ function renderRow(row, onChange) {
 
   row.segments.forEach((segment) => {
     if (segment.type === "text") {
+      if (!segment.value.trim()) {
+        rowEl.appendChild(document.createTextNode(segment.value));
+        return;
+      }
       const span = document.createElement("span");
       span.className = "text-segment";
       span.textContent = segment.value;
@@ -634,9 +643,7 @@ function renderBlocks(blocks) {
   });
 }
 
-async function handleProtocolChange() {
-  loadStatus.textContent = "Загрузка...";
-  const template = await loadTemplate(protocolSelect.value);
+function applyTemplate(template) {
   currentBlocks = normalizeBlocks(template).map((block) => ({
     ...block,
     rows: [createRow(block.content)],
@@ -644,6 +651,16 @@ async function handleProtocolChange() {
 
   renderBlocks(currentBlocks);
   updateOutput();
+}
+
+function getCurrentProtocol() {
+  return protocols.find((item) => item.id === protocolSelect.value);
+}
+
+async function handleProtocolChange() {
+  loadStatus.textContent = "Загрузка...";
+  const template = await loadTemplate(protocolSelect.value);
+  applyTemplate(template);
   loadStatus.textContent = "Готово";
 }
 
@@ -658,9 +675,13 @@ function resizeTextarea(textarea) {
 }
 
 function autoSizeInput(input) {
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    input.style.width = "";
+    return;
+  }
   const text = input.value || input.placeholder || "0";
   const extraPadding = getTextWidth(input, "0000");
-  const width = Math.max(getTextWidth(input, text) + extraPadding + 24, 70);
+  const width = getTextWidth(input, text) + extraPadding + 24;
   input.style.width = `${width}px`;
 }
 
@@ -704,6 +725,9 @@ function shareProtocol(platform) {
 
   if (platform === "max") {
     window.location.href = target.app;
+    window.setTimeout(() => {
+      window.location.href = target.web;
+    }, 500);
     return;
   }
 
@@ -721,6 +745,42 @@ document.addEventListener("click", (event) => {
   if (target.matches("[data-share]")) {
     shareProtocol(target.dataset.share);
   }
+  if (target.matches("[data-template-action]")) {
+    handleTemplateAction(target.dataset.templateAction);
+  }
 });
 
 protocolOutput.addEventListener("input", () => resizeTextarea(protocolOutput));
+
+async function handleTemplateAction(action) {
+  const protocol = getCurrentProtocol();
+  if (!protocol) return;
+
+  if (action === "refresh") {
+    loadStatus.textContent = "Обновление...";
+    templateCache.delete(protocol.file);
+    const template = await loadTemplate(protocol.id, { bustCache: true });
+    applyTemplate(template);
+    loadStatus.textContent = "Готово";
+    return;
+  }
+
+  if (action === "edit") {
+    window.open(protocol.file, "_blank", "noopener");
+    return;
+  }
+
+  if (action === "download") {
+    const url = `${protocol.file}?v=${Date.now()}`;
+    const response = await fetch(url);
+    const text = await response.text();
+    const blob = new Blob([text], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = protocol.file;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(link.href);
+  }
+}
