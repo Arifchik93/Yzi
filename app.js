@@ -688,29 +688,14 @@ function shareProtocol(platform) {
   const target = targets[platform];
   if (!target) return;
 
-  if (platform === "max" && navigator.share) {
-    navigator
-      .share({ text })
-      .then(() => {})
-      .catch(() => {
-        window.open(target.web, "_blank", "noopener,noreferrer");
-      });
+  if (platform === "max") {
+    window.location.href = target.app;
     return;
   }
 
-  const fallbackTimeout = window.setTimeout(() => {
-    window.open(target.web, "_blank", "noopener,noreferrer");
-  }, 700);
-
-  window.addEventListener(
-    "pagehide",
-    () => {
-      window.clearTimeout(fallbackTimeout);
-    },
-    { once: true }
-  );
-
-  window.location.href = target.app;
+  if (platform === "telegram") {
+    window.location.href = target.app;
+  }
 }
 
 document.addEventListener("click", (event) => {
