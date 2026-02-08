@@ -66,7 +66,7 @@ function parseSegments(text) {
 
   const parseOptionTokens = (rawOption) => {
     const tokens = [];
-    const placeholderRegex = /__|<[^>]+>/g;
+    const placeholderRegex = /__|_ _|<[^>]+>/g;
     let lastTokenIndex = 0;
     let placeholderMatch;
     let inputIndex = 0;
@@ -90,6 +90,13 @@ function parseSegments(text) {
           inputType: "number",
           inputIndex: inputIndex++,
           placeholder: "число",
+        });
+      } else if (tokenValue === "_ _") {
+        tokens.push({
+          type: "input",
+          inputType: "text",
+          inputIndex: inputIndex++,
+          placeholder: "текст",
         });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();
@@ -142,7 +149,7 @@ function parseSegments(text) {
 
   const parseInlineTokens = (rawText) => {
     const tokens = [];
-    const placeholderRegex = /__|<[^>]+>/g;
+    const placeholderRegex = /__|_ _|<[^>]+>/g;
     let lastTokenIndex = 0;
     let placeholderMatch;
     let inputIndex = 0;
@@ -166,6 +173,13 @@ function parseSegments(text) {
           inputType: "number",
           inputIndex: inputIndex++,
           placeholder: "число",
+        });
+      } else if (tokenValue === "_ _") {
+        tokens.push({
+          type: "input",
+          inputType: "text",
+          inputIndex: inputIndex++,
+          placeholder: "текст",
         });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();

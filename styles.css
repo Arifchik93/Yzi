@@ -71,6 +71,7 @@ body {
 .text-segment {
   white-space: pre-wrap;
   font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .field {
@@ -203,6 +204,10 @@ button.secondary {
   gap: 10px;
 }
 
+.output label {
+  font-weight: 600;
+}
+
 textarea {
   width: 100%;
   padding: 14px;
@@ -210,6 +215,7 @@ textarea {
   border: 1px solid #cfd2d8;
   font-family: inherit;
   font-size: 0.95rem;
+  font-weight: 400;
   resize: none;
 }
 
@@ -237,9 +243,13 @@ textarea {
     padding: 10px;
   }
 
+  .form {
+    gap: 8px;
+  }
+
   .form-row {
     align-items: flex-start;
-    gap: 4px;
+    gap: 2px;
   }
 
   .field,
