@@ -247,6 +247,74 @@ textarea {
   gap: 10px;
 }
 
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(17, 19, 24, 0.6);
+}
+
+.modal__content {
+  position: relative;
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  width: min(900px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+}
+
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal__header h2 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.modal__subtitle {
+  margin: 0;
+  color: #4f4f56;
+  font-size: 0.95rem;
+}
+
+.modal__textarea {
+  min-height: 220px;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.modal__status {
+  min-height: 22px;
+  color: #0061a8;
+  font-size: 0.95rem;
+}
+
+.modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
 @media (max-width: 768px) {
   .page {
     padding: 12px 12px 20px;
@@ -335,6 +403,18 @@ textarea {
   .actions {
     margin-top: 8px;
     gap: 6px;
+  }
+
+  .modal__content {
+    padding: 14px;
+  }
+
+  .modal__actions {
+    width: 100%;
+  }
+
+  .modal__actions button {
+    width: 100%;
   }
 
   button {
