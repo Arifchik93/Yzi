@@ -1137,6 +1137,11 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
       || context.hasPathologicalQuestionLymph;
     const reactiveLymphMatch = !rule.requireReactiveLymph || context.allLymphReactive;
     const lymphoproliferativeMatch = !rule.requireLymphoproliferative || context.hasLymphoproliferativeSuspicion;
+
+    const significantLymphRows = (context.lymphRows || []).filter((row) => {
+      const amount = row?.fields?.[0] || "";
+      return amount && !amount.includes("визуально не изменены");
+    });
     const noLesionsMatch = !rule.requireNoLesions || !context.hasLesions;
     const singleLesionMatch = !rule.requireSingleLesion || context.lesions.length === 1;
     const minLesionsCountMatch = rule.minLesionsCount == null || context.lesions.length >= rule.minLesionsCount;
@@ -1153,11 +1158,15 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
       || rule.requireMorphotypeIncludes.some((token) => (context.morphotype || "").includes(token));
     const ductsExpandedMatch = !rule.requireDuctsExpanded || (context.ducts || "").includes("расширены");
     const onlyAxillaryLymphMatch = !rule.requireOnlyAxillaryLymph
-      || context.lymphRows.every((row) => row.group.toLowerCase().includes("подмышеч") || (row.fields?.[0] || "").includes("визуально не изменены"));
+      || significantLymphRows.every((row) => row.group.toLowerCase().includes("подмышеч"));
     const lymphSideMatch = !rule.requireLymphSides
-      || context.lymphRows.some((row) => rule.requireLymphSides.some((token) => row.group.toLowerCase().includes(token.toLowerCase())));
+      || rule.requireLymphSides.every((token) =>
+        significantLymphRows.some((row) => row.group.toLowerCase().includes(token.toLowerCase()))
+      );
     const lymphGroupMatch = !rule.requireLymphGroupIn
-      || context.lymphRows.some((row) => rule.requireLymphGroupIn.some((token) => row.group.toLowerCase().includes(token.toLowerCase())));
+      || rule.requireLymphGroupIn.every((token) =>
+        significantLymphRows.some((row) => row.group.toLowerCase().includes(token.toLowerCase()))
+      );
 
     if (!(
       aiitMatch

@@ -392,71 +392,9 @@
     },
     "combinedRules": [
       {
-        "requireReactiveLymph": true,
-        "requireNoPathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "поднижнечелюст"
-        ],
-        "conclusion": "Реактивные изменения поднижнечелюстных лимфоузлов.",
-        "riskLevel": "benign"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "поднижнечелюст"
-        ],
-        "conclusion": "Патологические изменения поднижнечелюстных лимфоузлов.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requireReactiveLymph": true,
-        "requireNoPathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "яремные в/3"
-        ],
-        "conclusion": "Реактивные изменения яремных лимфоузлов верхней трети шеи.",
-        "riskLevel": "benign"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "яремные в/3"
-        ],
-        "conclusion": "Патологические изменения яремных лимфоузлов верхней трети шеи.",
-        "riskLevel": "high"
-      },
-      {
-        "requireReactiveLymph": true,
-        "requireNoPathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "яремные ср/3"
-        ],
-        "conclusion": "Реактивные изменения яремных лимфоузлов средней трети шеи.",
-        "riskLevel": "benign"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "яремные ср/3"
-        ],
-        "conclusion": "Патологические изменения яремных лимфоузлов средней трети шеи.",
-        "riskLevel": "high"
-      },
-      {
-        "requireReactiveLymph": true,
-        "requireNoPathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "яремные н/3"
-        ],
-        "conclusion": "Реактивные изменения яремных лимфоузлов нижней трети шеи.",
-        "riskLevel": "benign"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "яремные н/3"
-        ],
-        "conclusion": "Патологические изменения яремных лимфоузлов нижней трети шеи.",
+        "requireLymphoproliferative": true,
+        "conclusion": "Признаки лимфопролиферативного поражения лимфатических узлов.",
+        "recommendation": "Консультация гематолога, приоритетная морфологическая верификация наиболее измененного лимфоузла.",
         "riskLevel": "high"
       },
       {
@@ -464,8 +402,7 @@
         "requireLymphGroupIn": [
           "надключич"
         ],
-        "conclusion": "Патологически измененные надключичные лимфоузлы.",
-        "recommendation": "Онкологическая настороженность: исключение метастатического поражения.",
+        "conclusion": "Патологическая надключичная лимфаденопатия.",
         "riskLevel": "high"
       },
       {
@@ -473,40 +410,32 @@
         "requireLymphGroupIn": [
           "подключич"
         ],
-        "conclusion": "Патологически измененные подключичные лимфоузлы.",
-        "recommendation": "Онкологическая настороженность: исключение опухолевого процесса.",
+        "conclusion": "Патологическая подключичная лимфаденопатия.",
         "riskLevel": "high"
       },
       {
-        "requireOnlyAxillaryLymph": true,
-        "requireReactiveLymph": true,
-        "requireNoPathologicalLymph": true,
-        "conclusion": "Изолированные реактивные изменения подмышечных лимфоузлов.",
-        "riskLevel": "benign"
+        "requirePathologicalLymph": true,
+        "requireLymphGroupIn": [
+          "яремные",
+          "поднижнечелюст"
+        ],
+        "conclusion": "Патологические изменения шейных лимфоузлов.",
+        "riskLevel": "high"
       },
       {
         "requirePathologicalLymph": true,
         "requireLymphGroupIn": [
           "подмышеч"
         ],
-        "conclusion": "Патологические изменения подмышечных лимфоузлов.",
+        "conclusion": "Патологическая подмышечная лимфаденопатия.",
         "riskLevel": "moderate"
-      },
-      {
-        "requireReactiveLymph": true,
-        "requireNoPathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "пахов"
-        ],
-        "conclusion": "Реактивные изменения паховых лимфоузлов.",
-        "riskLevel": "benign"
       },
       {
         "requirePathologicalLymph": true,
         "requireLymphGroupIn": [
           "пахов"
         ],
-        "conclusion": "Патологические изменения паховых лимфоузлов.",
+        "conclusion": "Патологическая паховая лимфаденопатия.",
         "riskLevel": "moderate"
       },
       {
@@ -520,60 +449,6 @@
       },
       {
         "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "яремные",
-          "подмышеч"
-        ],
-        "conclusion": "Сочетанное поражение шейных и подмышечных лимфоузлов.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "яремные",
-          "пахов"
-        ],
-        "conclusion": "Сочетанное поражение шейных и паховых лимфоузлов.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "надключич",
-          "подключич"
-        ],
-        "conclusion": "Патологические изменения над- и подключичных лимфоузлов.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "надключич",
-          "подключич"
-        ],
-        "conclusion": "Подозрительные над-/подключичные лимфоузлы (включая сомнительные).",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "поднижнечелюст",
-          "яремные"
-        ],
-        "conclusion": "Подозрительная шейная лимфаденопатия.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "подмышеч",
-          "пахов"
-        ],
-        "conclusion": "Подозрительная периферическая лимфаденопатия (подмышечные/паховые).",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalLymph": true,
         "requireLymphSides": [
           "справа",
           "слева"
@@ -583,279 +458,15 @@
       },
       {
         "requireReactiveLymph": true,
-        "requireLymphSides": [
-          "справа",
-          "слева"
-        ],
-        "conclusion": "Двусторонние реактивные изменения лимфоузлов.",
+        "requireNoPathologicalLymph": true,
+        "conclusion": "Реактивная лимфаденопатия без достоверных патологических признаков.",
         "riskLevel": "benign"
       },
       {
         "requirePathologicalOrQuestionLymph": true,
-        "requireLymphSides": [
-          "справа"
-        ],
-        "conclusion": "Преимущественно правосторонняя лимфаденопатия.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphSides": [
-          "слева"
-        ],
-        "conclusion": "Преимущественно левосторонняя лимфаденопатия.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalLymph": true,
         "requireReactiveLymph": true,
-        "conclusion": "Смешанная лимфаденопатия: сочетание патологических и реактивных лимфоузлов.",
+        "conclusion": "Смешанные изменения лимфоузлов: патологические/сомнительные и реактивные.",
         "riskLevel": "high"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireOnlyAxillaryLymph": true,
-        "conclusion": "Изолированные патологические изменения подмышечных лимфоузлов.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "поднижнечелюст",
-          "яремные",
-          "надключич",
-          "подключич",
-          "подмышеч",
-          "пахов"
-        ],
-        "conclusion": "Многоуровневая лимфаденопатия.",
-        "recommendation": "Требуется расширенное онкогематологическое дообследование.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "надключич"
-        ],
-        "conclusion": "Надключичная лимфаденопатия (включая сомнительные изменения).",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "подключич"
-        ],
-        "conclusion": "Подключичная лимфаденопатия (включая сомнительные изменения).",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "подмышеч",
-          "надключич"
-        ],
-        "conclusion": "Поражение подмышечных и надключичных лимфоузлов.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "подмышеч",
-          "подключич"
-        ],
-        "conclusion": "Поражение подмышечных и подключичных лимфоузлов.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "пахов",
-          "подмышеч"
-        ],
-        "conclusion": "Поражение паховых и подмышечных лимфоузлов.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "пахов"
-        ],
-        "conclusion": "Сомнительные изменения паховых лимфоузлов.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "подмышеч"
-        ],
-        "conclusion": "Сомнительные изменения подмышечных лимфоузлов.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "яремные"
-        ],
-        "conclusion": "Сомнительные изменения шейных лимфоузлов.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "поднижнечелюст"
-        ],
-        "conclusion": "Сомнительные изменения поднижнечелюстных лимфоузлов.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "поднижнечелюст",
-          "яремные",
-          "надключич"
-        ],
-        "conclusion": "Распространенная шейно-надключичная лимфаденопатия.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "яремные",
-          "надключич",
-          "подключич"
-        ],
-        "conclusion": "Лимфаденопатия центральных шейных коллекторов.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "подмышеч",
-          "пахов",
-          "яремные"
-        ],
-        "conclusion": "Вероятно генерализованная лимфаденопатия.",
-        "recommendation": "Рекомендована консультация гематолога, лабораторное и морфологическое дообследование.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "подмышеч",
-          "пахов",
-          "надключич"
-        ],
-        "conclusion": "Полифокальная лимфаденопатия с вовлечением надключичной группы.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "поднижнечелюст",
-          "подмышеч",
-          "пахов"
-        ],
-        "conclusion": "Полифокальная периферическая лимфаденопатия.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "яремные",
-          "подмышеч",
-          "пахов"
-        ],
-        "conclusion": "Полифокальная лимфаденопатия шейных, подмышечных и паховых групп.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "пахов"
-        ],
-        "requireLymphSides": [
-          "справа"
-        ],
-        "conclusion": "Преимущественно правосторонние патологические паховые лимфоузлы.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalLymph": true,
-        "requireLymphGroupIn": [
-          "пахов"
-        ],
-        "requireLymphSides": [
-          "слева"
-        ],
-        "conclusion": "Преимущественно левосторонние патологические паховые лимфоузлы.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "надключич"
-        ],
-        "requireLymphSides": [
-          "справа",
-          "слева"
-        ],
-        "conclusion": "Двусторонняя надключичная лимфаденопатия.",
-        "recommendation": "Высокий онкологический риск: рекомендовано приоритетное дообследование.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "подключич"
-        ],
-        "requireLymphSides": [
-          "справа",
-          "слева"
-        ],
-        "conclusion": "Двусторонняя подключичная лимфаденопатия.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "подмышеч"
-        ],
-        "requireLymphSides": [
-          "справа",
-          "слева"
-        ],
-        "conclusion": "Двусторонняя подмышечная лимфаденопатия.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "пахов"
-        ],
-        "requireLymphSides": [
-          "справа",
-          "слева"
-        ],
-        "conclusion": "Двусторонняя паховая лимфаденопатия.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireLymphGroupIn": [
-          "поднижнечелюст",
-          "яремные",
-          "подмышеч",
-          "пахов"
-        ],
-        "conclusion": "Признаки распространенной лимфаденопатии.",
-        "riskLevel": "high"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "conclusion": "УЗ-признаки, подозрительные на лимфопролиферативное заболевание.",
-        "recommendation": "Консультация гематолога и морфологическая верификация наиболее измененного лимфоузла.",
-        "riskLevel": "high",
-        "requireLymphoproliferative": true
       }
     ],
     "qualityRules": {
