@@ -1108,7 +1108,7 @@ function buildPatientRecommendation(protocolRules, riskLevel, recommendationPart
     .filter((value, index, arr) => value && arr.indexOf(value) === index)
     .filter((value) => {
       const normalized = value.toLowerCase();
-      if (isOncoRisk && normalized.includes("консультация онколога")) {
+      if (isOncoRisk && normalized.includes("консультация онколога") && !normalized.includes("сроч")) {
         return false;
       }
       if (!isOncoRisk && normalized.includes("консультация эндокринолога")) {

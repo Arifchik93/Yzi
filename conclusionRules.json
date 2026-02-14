@@ -233,9 +233,9 @@
   },
   "breast": {
     "recommendationTemplates": {
-      "benignRisk": "Консультация маммолога. При наличии клинических жалоб — дообследование по показаниям.",
-      "moderateRisk": "Консультация маммолога/онколога, решение вопроса о прицельной верификации и дообследовании по BI-RADS.",
-      "highRisk": "Срочная консультация онколога-маммолога, решение вопроса о морфологической верификации образования.",
+      "benignRisk": "Консультация маммолога. Динамическое наблюдение по клинической необходимости.",
+      "moderateRisk": "Консультация маммолога (онколога-маммолога по показаниям), решение вопроса о дообследовании.",
+      "highRisk": "Консультация онколога-маммолога, решение вопроса о морфологической верификации по показаниям.",
       "followUpPrefix": "Контрольное УЗИ молочных желез"
     },
     "followUpMonthsByRisk": {
@@ -274,79 +274,8 @@
         "biradsEquals": 5,
         "conclusion": "Выявлены образования высокой подозрительности на злокачественный процесс (BI-RADS 5).",
         "riskLevel": "high",
-        "group": "birads-main"
-      },
-      {
-        "biradsEquals": 3,
-        "minBiradsCount": 2,
-        "conclusion": "Множественные образования BI-RADS 3.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requireQuadrantCount": 2,
-        "conclusion": "Мультифокальное поражение (образования в нескольких квадрантах).",
-        "riskLevel": "moderate"
-      },
-      {
-        "requireBothSides": true,
-        "conclusion": "Билатеральные очаговые изменения молочных желез.",
-        "riskLevel": "moderate"
-      },
-      {
-        "orientationIncludes": [
-          "вертикально"
-        ],
-        "conclusion": "Определяются образования с неблагоприятной вертикальной ориентацией.",
-        "riskLevel": "high"
-      },
-      {
-        "contoursIncludes": [
-          "неровное, нечеткое"
-        ],
-        "conclusion": "Определяются образования с неровными нечеткими контурами.",
-        "riskLevel": "high"
-      },
-      {
-        "vascularityIncludes": [
-          "интранодулярная, хаотичная"
-        ],
-        "conclusion": "Определяется интранодулярная хаотичная васкуляризация в образовании.",
-        "riskLevel": "high"
-      },
-      {
-        "tagIncludes": [
-          "киста"
-        ],
-        "conclusion": "Кистозные изменения молочных желез.",
-        "riskLevel": "benign"
-      },
-      {
-        "tagIncludes": [
-          "осложненная киста"
-        ],
-        "conclusion": "Признаки осложненной кисты.",
-        "riskLevel": "moderate"
-      },
-      {
-        "tagIncludes": [
-          "кластер микрокист?"
-        ],
-        "conclusion": "УЗ-признаки кластера микрокист (требует динамического контроля).",
-        "riskLevel": "moderate"
-      },
-      {
-        "tagIncludes": [
-          "филлоидная опухоль?"
-        ],
-        "conclusion": "Признаки образования с вероятностью филлоидной опухоли.",
-        "riskLevel": "high"
-      },
-      {
-        "tagIncludes": [
-          "новообразование?"
-        ],
-        "conclusion": "Выявлено новообразование неясной природы.",
-        "riskLevel": "high"
+        "group": "birads-main",
+        "recommendation": "Срочная консультация онколога-маммолога, решение вопроса о морфологической верификации образования."
       }
     ],
     "ductRules": [
@@ -354,35 +283,25 @@
         "ductsIncludes": [
           "незначительно расширены"
         ],
-        "conclusion": "Незначительная эктазия млечных протоков.",
+        "conclusion": "Незначительная дуктэктазия млечных протоков.",
         "riskLevel": "benign"
       },
       {
         "ductsIncludes": [
           "локально расширены"
         ],
-        "conclusion": "Локальная эктазия млечных протоков.",
-        "riskLevel": "moderate"
+        "conclusion": "Локальная дуктэктазия млечных протоков.",
+        "riskLevel": "benign"
       },
       {
         "ductsIncludes": [
           "диффузно расширены"
         ],
-        "conclusion": "Диффузная эктазия млечных протоков.",
+        "conclusion": "Диффузная дуктэктазия млечных протоков.",
         "riskLevel": "moderate"
       }
     ],
-    "morphotypeRules": [
-      {
-        "morphotypeIncludes": [
-          "Постменопаузальный",
-          "Инволютивный"
-        ],
-        "requireNoLesions": true,
-        "conclusion": "Инволютивные изменения молочных желез без очаговой патологии.",
-        "riskLevel": "benign"
-      }
-    ],
+    "morphotypeRules": [],
     "lymphRule": {
       "predefinedBlockPattern": "^(Подмышечные|Подключичные|Надключичные)",
       "additionalBlockTitle": "Дополнительные лимфоузлы",
@@ -402,164 +321,18 @@
         "гиперплаз"
       ],
       "questionMarkToken": "?",
-      "reactiveConclusion": "Реактивная лимфаденопатия регионарных лимфоузлов.",
-      "reactiveRecommendation": "Рекомендуется консультация маммолога и контроль по клинической необходимости.",
+      "reactiveConclusion": "Реактивные изменения регионарных лимфоузлов.",
+      "reactiveRecommendation": "Консультация маммолога, наблюдение по клинической необходимости.",
       "reactiveRiskLevel": "benign",
       "reactiveProbableConclusion": "Вероятно реактивные изменения регионарных лимфоузлов.",
-      "reactiveProbableRecommendation": "Рекомендуется консультация маммолога/онколога и динамическое наблюдение.",
-      "reactiveProbableRiskLevel": "moderate",
-      "conglomerateConclusion": "Определяется конгломерат регионарных лимфоузлов.",
-      "pathologicalFallbackConclusion": "Патологически измененные регионарные лимфоузлы.",
+      "reactiveProbableRecommendation": "Консультация маммолога, контроль в динамике.",
+      "reactiveProbableRiskLevel": "benign",
+      "conglomerateConclusion": "Выявлен конгломерат регионарных лимфоузлов.",
+      "pathologicalFallbackConclusion": "Выявлены патологически измененные регионарные лимфоузлы.",
       "pathologicalDetailedPrefix": "Патологически измененные регионарные лимфоузлы",
-      "pathologicalRecommendation": "Рекомендуется консультация онколога-маммолога и решение вопроса о морфологической верификации.",
+      "pathologicalRecommendation": "Консультация онколога-маммолога, решение вопроса о дообследовании.",
       "pathologicalRiskLevel": "high"
     },
-    "combinedRules": [
-      {
-        "requireBiradsIn": [
-          4,
-          5
-        ],
-        "requirePathologicalLymph": true,
-        "conclusion": "Сочетание подозрительного образования молочной железы и патологических лимфоузлов: нельзя исключить злокачественный процесс.",
-        "recommendation": "Рекомендуется срочная консультация онколога-маммолога.",
-        "riskLevel": "high"
-      },
-      {
-        "requireBiradsIn": [
-          3
-        ],
-        "requireReactiveLymph": true,
-        "conclusion": "BI-RADS 3 в сочетании с реактивными изменениями лимфоузлов.",
-        "riskLevel": "moderate"
-      },
-      {
-        "requireBiradsIn": [
-          1,
-          2
-        ],
-        "requireReactiveLymph": true,
-        "conclusion": "Доброкачественные изменения молочных желез при реактивных изменениях лимфоузлов.",
-        "riskLevel": "benign"
-      },
-      {
-        "requireBiradsIn": [
-          4,
-          5
-        ],
-        "requireNoPathologicalLymph": true,
-        "conclusion": "Подозрительное образование молочной железы без достоверно патологических лимфоузлов.",
-        "riskLevel": "high"
-      },
-      {
-        "requireEchogenicityIncludes": [
-          "гипоэхогенное",
-          "выраженно гипоэхогенное"
-        ],
-        "requireOrientationIncludes": [
-          "вертикально"
-        ],
-        "conclusion": "Сочетание гипоэхогенности и вертикальной ориентации образования.",
-        "riskLevel": "high"
-      },
-      {
-        "requireTagIncludes": [
-          "фиброаденома"
-        ],
-        "requireNoPathologicalLymph": true,
-        "conclusion": "УЗ-признаки фиброаденомы без признаков поражения регионарных лимфоузлов.",
-        "riskLevel": "benign"
-      },
-      {
-        "requireMorphotypeIncludes": [
-          "Лактационный"
-        ],
-        "requireDuctsExpanded": true,
-        "conclusion": "Лактационные изменения с расширением млечных протоков.",
-        "riskLevel": "benign"
-      },
-      {
-        "requireMorphotypeIncludes": [
-          "Ювенальный",
-          "Репродуктивный"
-        ],
-        "requireBiradsIn": [
-          3
-        ],
-        "conclusion": "На фоне плотного морфотипа определяется образование BI-RADS 3 (требуется динамический контроль).",
-        "riskLevel": "moderate"
-      },
-      {
-        "requireEchogenicityIncludes": [
-          "анэхогенное"
-        ],
-        "requireVascularityIncludes": [
-          "аваскулярное"
-        ],
-        "conclusion": "Изолированная аваскулярная анэхогенная киста.",
-        "riskLevel": "benign"
-      },
-      {
-        "requireOnlyAxillaryLymph": true,
-        "requireReactiveLymph": true,
-        "conclusion": "Реактивные изменения только подмышечных лимфоузлов.",
-        "riskLevel": "benign"
-      },
-      {
-        "requirePathologicalOrQuestionLymph": true,
-        "requireBiradsIn": [
-          3
-        ],
-        "conclusion": "Образование BI-RADS 3 в сочетании с патологическими/сомнительными лимфоузлами.",
-        "riskLevel": "high"
-      },
-      {
-        "requireBiradsIn": [
-          1,
-          2
-        ],
-        "requirePathologicalLymph": true,
-        "conclusion": "При доброкачественных изменениях молочных желез выявлены патологические лимфоузлы (требуется онконастороженность).",
-        "riskLevel": "moderate"
-      },
-      {
-        "requireSingleLesion": true,
-        "requireBiradsIn": [
-          2
-        ],
-        "requireNoPathologicalLymph": true,
-        "conclusion": "Одиночное доброкачественное образование без признаков поражения лимфоузлов.",
-        "riskLevel": "benign"
-      },
-      {
-        "requireTagIncludes": [
-          "киста"
-        ],
-        "minLesionsCount": 2,
-        "conclusion": "Множественные доброкачественные кистозные образования.",
-        "riskLevel": "benign"
-      },
-      {
-        "requireLymphGroupIn": [
-          "надключич"
-        ],
-        "requirePathologicalLymph": true,
-        "conclusion": "Патологические надключичные лимфоузлы.",
-        "riskLevel": "high"
-      },
-      {
-        "requireLymphGroupIn": [
-          "подключич"
-        ],
-        "requirePathologicalLymph": true,
-        "conclusion": "Патологические подключичные лимфоузлы.",
-        "riskLevel": "high"
-      },
-      {
-        "requireBothSides": true,
-        "conclusion": "Билатеральный характер поражения молочных желез.",
-        "riskLevel": "moderate"
-      }
-    ]
+    "combinedRules": []
   }
 }
