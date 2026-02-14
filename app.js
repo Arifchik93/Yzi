@@ -38,6 +38,8 @@ let currentBlocks = [];
 const textMeasureCanvas = document.createElement("canvas");
 let editorTemplateLabel = "";
 const localTemplatePrefix = "local-template-";
+const conclusionRulesFile = "conclusionRules.json";
+let conclusionRulesConfig = {};
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -66,6 +68,21 @@ async function loadTemplate(protocolId, { bustCache = false } = {}) {
   const data = await response.json();
   templateCache.set(protocol.file, data);
   return data;
+}
+
+
+async function loadConclusionRules() {
+  try {
+    const response = await fetch(`${conclusionRulesFile}?v=${Date.now()}`);
+    if (!response.ok) {
+      conclusionRulesConfig = {};
+      return;
+    }
+    const parsed = await response.json();
+    conclusionRulesConfig = parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    conclusionRulesConfig = {};
+  }
 }
 
 function normalizeBlocks(template) {
@@ -385,8 +402,214 @@ function updateOutput() {
     })
     .join("");
 
-  protocolOutput.value = text.trim();
+  const conclusion = buildAutoConclusion(currentBlocks, protocolSelect.value, conclusionRulesConfig);
+  const textWithConclusion = conclusion ? `${text.trim()}\n\n${conclusion}` : text.trim();
+
+  protocolOutput.value = textWithConclusion;
   resizeTextarea(protocolOutput);
+}
+
+function getFieldValues(row) {
+  return row.segments
+    .filter((segment) => segment.type === "field")
+    .map((segment) => (segment.value || "").trim());
+}
+
+function normalizeSpaces(value) {
+  return (value || "").replace(/\s+/g, " ").trim();
+}
+
+function buildAutoConclusion(blocks, protocolId, rulesConfig) {
+  const protocolRules = rulesConfig?.[protocolId];
+  if (!protocolRules) {
+    return "";
+  }
+
+  const conclusions = [];
+  const recommendations = [];
+
+  applyAiitRule(blocks, protocolRules.aiitRule, conclusions, recommendations);
+  applyLesionsRule(blocks, protocolRules.lesionsRule, conclusions);
+  applyLymphRule(blocks, protocolRules.lymphRule, conclusions);
+
+  if (!conclusions.length && !recommendations.length) {
+    return "";
+  }
+
+  const sections = [`Заключение: ${conclusions.join(" ")}`];
+  if (recommendations.length) {
+    sections.push(`Рекомендации: ${recommendations.join(" ")}`);
+  }
+
+  return sections.join("\n");
+}
+
+function getBlockByRule(blocks, rule = {}) {
+  if (!rule) return null;
+  if (rule.blockTitle) {
+    return blocks.find((block) => block.title === rule.blockTitle) || null;
+  }
+  if (rule.blockStartsWith) {
+    return (
+      blocks.find((block) =>
+        typeof block.content === "string" && block.content.startsWith(rule.blockStartsWith)
+      ) || null
+    );
+  }
+  return null;
+}
+
+function applyAiitRule(blocks, rule, conclusions, recommendations) {
+  if (!rule) return;
+  const block = getBlockByRule(blocks, rule);
+  if (!block?.rows?.[0]) return;
+
+  const fields = getFieldValues(block.rows[0]);
+  const structure = fields[rule.structureFieldIndex ?? 0] || "";
+  const echogenicity = fields[rule.echogenicityFieldIndex ?? 1] || "";
+
+  const structureMatch = (rule.structureIncludes || []).some((token) =>
+    structure.includes(token)
+  );
+  const echogenicityMatch = (rule.echogenicityIncludes || []).some((token) =>
+    echogenicity.includes(token)
+  );
+
+  if (!structureMatch || !echogenicityMatch) return;
+  if (rule.conclusion) conclusions.push(rule.conclusion);
+  if (rule.recommendation) recommendations.push(rule.recommendation);
+}
+
+function applyLesionsRule(blocks, rule, conclusions) {
+  if (!rule) return;
+  const block = getBlockByRule(blocks, rule);
+  if (!block?.rows?.length) return;
+
+  const items = block.rows
+    .map((row) => getFieldValues(row))
+    .filter((fields) => fields.length > (rule.typeFieldIndex ?? 0))
+    .filter((fields) => {
+      const location = fields[rule.locationFieldIndex ?? 0] || "";
+      return location && !location.includes(rule.skipIfLocationIncludes || "__never__");
+    })
+    .map((fields) => {
+      const locationRaw = fields[rule.locationFieldIndex ?? 0] || "";
+      const typeRaw = fields[rule.typeFieldIndex ?? 0] || "";
+      const classRaw = fields[rule.classificationFieldIndex ?? 0] || "";
+
+      const location = normalizeSpaces(
+        rule.locationPrefixToRemove
+          ? locationRaw.replace(new RegExp(`^${rule.locationPrefixToRemove}\\s*`, "i"), "")
+          : locationRaw
+      );
+
+      const type = normalizeSpaces(
+        (rule.typeCleanupPatterns || []).reduce((acc, pattern) => acc.replace(new RegExp(pattern, "gi"), ""), typeRaw)
+      );
+
+      const classification = normalizeSpaces(classRaw);
+      return [location, type, classification].filter(Boolean).join(", ");
+    })
+    .filter(Boolean);
+
+  if (!items.length) return;
+  const prefix = rule.conclusionPrefix || "Очаговые образования";
+  conclusions.push(`${prefix}: ${items.join("; ")}.`);
+}
+
+function collectLymphRows(blocks, rule) {
+  const result = [];
+  const regex = new RegExp(rule.predefinedBlockPattern || "^$", "i");
+
+  blocks
+    .filter((block) => block.type === "text" && regex.test(block.content || ""))
+    .forEach((block) => {
+      const fields = getFieldValues(block.rows[0] || { segments: [] });
+      const group = normalizeSpaces((block.content || "").split("{")[0]);
+      result.push({ group, fields });
+    });
+
+  const additionalBlock = blocks.find((block) => block.title === rule.additionalBlockTitle);
+  (additionalBlock?.rows || []).forEach((row) => {
+    const fields = getFieldValues(row);
+    if (!fields.length || !fields[rule.additionalGroupFieldIndex ?? 0]) return;
+
+    const side = fields[rule.additionalSideFieldIndex ?? 2] || "";
+    const group = normalizeSpaces(
+      `${fields[rule.additionalGroupFieldIndex ?? 0]}${side ? ` ${side}` : ""}`
+    );
+
+    result.push({
+      group,
+      fields: [
+        fields[rule.additionalAmountFieldIndex ?? 1],
+        fields[rule.additionalMorphologyFieldIndex ?? 3],
+        fields[rule.additionalVascularFieldIndex ?? 4],
+        fields[rule.additionalKmdFieldIndex ?? 5],
+        fields[rule.additionalStatusFieldIndex ?? 6],
+      ],
+    });
+  });
+
+  return result;
+}
+
+function applyLymphRule(blocks, rule, conclusions) {
+  if (!rule) return;
+  const lymphRows = collectLymphRows(blocks, rule);
+  const significantRows = lymphRows
+    .filter(({ fields }) => fields?.length >= 5)
+    .filter(({ fields }) => {
+      const amount = fields[rule.amountFieldIndex ?? 0] || "";
+      return amount && !amount.includes(rule.normalAmountToken || "визуально не изменены");
+    });
+
+  if (!significantRows.length) return;
+
+  const statuses = significantRows.map(({ fields }) =>
+    normalizeSpaces((fields[rule.statusFieldIndex ?? 4] || "").toLowerCase())
+  );
+
+  const pathologicalToken = rule.pathologicalToken || "патологический";
+  const reactiveTokens = rule.reactiveTokens || ["реактив", "гиперплаз"];
+  const questionableToken = rule.questionMarkToken || "?";
+
+  const hasPathological = statuses.some((status) => status.includes(pathologicalToken));
+  const allReactive = statuses.every((status) =>
+    reactiveTokens.some((token) => status.includes(token))
+  );
+  const hasQuestionable = statuses.some((status) => status.includes(questionableToken));
+
+  if (!hasPathological && allReactive && !hasQuestionable && rule.reactiveConclusion) {
+    conclusions.push(rule.reactiveConclusion);
+    return;
+  }
+
+  if (!hasPathological && allReactive && hasQuestionable && rule.reactiveProbableConclusion) {
+    conclusions.push(rule.reactiveProbableConclusion);
+    return;
+  }
+
+  const details = significantRows
+    .filter(({ fields }) =>
+      normalizeSpaces((fields[rule.statusFieldIndex ?? 4] || "").toLowerCase()).includes(pathologicalToken)
+    )
+    .map(({ group, fields }) => {
+      const amount = normalizeSpaces(fields[rule.amountFieldIndex ?? 0] || "");
+      const status = normalizeSpaces(fields[rule.statusFieldIndex ?? 4] || "");
+      return `${amount} ${group} (${status})`;
+    })
+    .filter(Boolean);
+
+  if (!details.length) {
+    if (rule.pathologicalFallbackConclusion) {
+      conclusions.push(rule.pathologicalFallbackConclusion);
+    }
+    return;
+  }
+
+  const prefix = rule.pathologicalDetailedPrefix || "Патологически изменённые л/у шеи";
+  conclusions.push(`${prefix}: ${details.join("; ")}.`);
 }
 
 function renderField(segment, onChange) {
@@ -739,7 +962,10 @@ async function handleProtocolChange() {
 protocolSelect.addEventListener("change", handleProtocolChange);
 
 populateProtocolOptions();
-handleProtocolChange();
+(async () => {
+  await loadConclusionRules();
+  await handleProtocolChange();
+})();
 
 function resizeTextarea(textarea) {
   textarea.style.height = "auto";
@@ -832,6 +1058,7 @@ async function handleTemplateAction(action) {
     loadStatus.textContent = "Обновление...";
     clearLocalTemplate(protocol.id);
     templateCache.delete(protocol.file);
+    await loadConclusionRules();
     const template = await loadTemplate(protocol.id, { bustCache: true });
     applyTemplate(template);
     loadStatus.textContent = "Готово";

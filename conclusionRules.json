@@ -1,0 +1,57 @@
+{
+  "thyroidnecklymph": {
+    "aiitRule": {
+      "blockStartsWith": "Структура паренхимы:",
+      "structureFieldIndex": 0,
+      "echogenicityFieldIndex": 1,
+      "structureIncludes": [
+        "неоднородная",
+        "значительно неоднородная",
+        "диффузно-неоднородная",
+        "очагово-неоднородная"
+      ],
+      "echogenicityIncludes": [
+        "понижена"
+      ],
+      "conclusion": "Признаки АИТ.",
+      "recommendation": "Консультация эндокринолога, дообследование АТТПО, ТТГ."
+    },
+    "lesionsRule": {
+      "blockTitle": "Объёмные образования",
+      "locationFieldIndex": 0,
+      "typeFieldIndex": 6,
+      "classificationFieldIndex": 7,
+      "skipIfLocationIncludes": "не визуализируются",
+      "locationPrefixToRemove": "визуализируется",
+      "typeCleanupPatterns": [
+        "[\\d\\s*.,]+мм",
+        "[\\d\\s*.,]+см"
+      ],
+      "conclusionPrefix": "Очаговые образования"
+    },
+    "lymphRule": {
+      "predefinedBlockPattern": "^(Яремные|Верхние медиастинальные)",
+      "additionalBlockTitle": "Дополнительные лимфоузлы",
+      "additionalGroupFieldIndex": 0,
+      "additionalAmountFieldIndex": 1,
+      "additionalSideFieldIndex": 2,
+      "additionalMorphologyFieldIndex": 3,
+      "additionalVascularFieldIndex": 4,
+      "additionalKmdFieldIndex": 5,
+      "additionalStatusFieldIndex": 6,
+      "amountFieldIndex": 0,
+      "statusFieldIndex": 4,
+      "normalAmountToken": "визуально не изменены",
+      "pathologicalToken": "патологический",
+      "reactiveTokens": [
+        "реактив",
+        "гиперплаз"
+      ],
+      "questionMarkToken": "?",
+      "reactiveConclusion": "Реактивная лимфаденопатия л/у шеи.",
+      "reactiveProbableConclusion": "Вероятно реактивная лимфаденопатия л/у шеи.",
+      "pathologicalFallbackConclusion": "Патологически изменённые л/у шеи.",
+      "pathologicalDetailedPrefix": "Патологически изменённые л/у шеи"
+    }
+  }
+}
