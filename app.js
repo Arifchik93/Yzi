@@ -871,16 +871,29 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
 }
 
 function buildPatientRecommendation(protocolRules, riskLevel, recommendationParts) {
-  const uniqueParts = recommendationParts.filter((value, index, arr) => value && arr.indexOf(value) === index);
   const templates = protocolRules.recommendationTemplates || {};
   const followUpMonthsByRisk = protocolRules.followUpMonthsByRisk || { benign: 12, moderate: 6, high: 3 };
 
   const followUpMonths = followUpMonthsByRisk[riskLevel] || 12;
+  const isOncoRisk = riskLevel === "moderate" || riskLevel === "high";
+
+  const uniqueParts = recommendationParts
+    .filter((value, index, arr) => value && arr.indexOf(value) === index)
+    .filter((value) => {
+      const normalized = value.toLowerCase();
+      if (isOncoRisk && normalized.includes("консультация онколога")) {
+        return false;
+      }
+      if (!isOncoRisk && normalized.includes("консультация эндокринолога")) {
+        return false;
+      }
+      return true;
+    });
 
   if (riskLevel === "high") {
     uniqueParts.unshift(
       templates.highRisk ||
-        "Консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ)."
+        "Срочная консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ)."
     );
   } else if (riskLevel === "moderate") {
     uniqueParts.unshift(

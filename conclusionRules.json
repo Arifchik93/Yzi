@@ -85,36 +85,8 @@
         "riskLevel": "moderate"
       }
     ],
-    "volumeRules": [
-      {
-        "minVolume": 25.01,
-        "conclusion": "Увеличение объема щитовидной железы (признаки диффузного зоба).",
-        "recommendation": "Рекомендуется консультация эндокринолога и контроль гормонов щитовидной железы.",
-        "riskLevel": "moderate"
-      },
-      {
-        "minVolume": 0,
-        "maxVolume": 25,
-        "conclusion": "Объем щитовидной железы в допустимых пределах.",
-        "riskLevel": "benign"
-      }
-    ],
-    "isthmusRules": [
-      {
-        "stateIncludes": [
-          "утолщен"
-        ],
-        "conclusion": "Утолщение перешейка щитовидной железы.",
-        "riskLevel": "moderate"
-      },
-      {
-        "stateIncludes": [
-          "не визуализируется"
-        ],
-        "conclusion": "Послеоперационные изменения в области перешейка щитовидной железы.",
-        "riskLevel": "moderate"
-      }
-    ],
+    "volumeRules": [],
+    "isthmusRules": [],
     "topographyRules": [
       {
         "locationIncludes": [
@@ -132,13 +104,6 @@
         "riskLevel": "moderate"
       },
       {
-        "acousticAccessIncludes": [
-          "затрудн"
-        ],
-        "conclusion": "Информативность исследования частично ограничена техническими условиями.",
-        "riskLevel": "moderate"
-      },
-      {
         "contoursIncludes": [
           "деформированные",
           "неровные",
@@ -150,7 +115,7 @@
     ],
     "lesionsRule": {
       "conclusionPrefix": "Очаговые образования",
-      "noLesionsConclusion": "Очаговые образования щитовидной железы не выявлены."
+      "noLesionsConclusion": ""
     },
     "noduleRules": [
       {
@@ -175,31 +140,6 @@
         "tiradsEquals": 5,
         "conclusion": "Выявлены узлы высокой подозрительности на злокачественный процесс (TI-RADS 5).",
         "riskLevel": "high"
-      },
-      {
-        "requireVertical": true,
-        "conclusion": "Есть узел с вертикальной ориентацией — признак повышенной онкологической настороженности.",
-        "riskLevel": "high"
-      },
-      {
-        "requireIrregularContours": true,
-        "conclusion": "Есть узел с неровными или нечеткими контурами.",
-        "riskLevel": "high"
-      },
-      {
-        "requireChaoticFlow": true,
-        "conclusion": "Есть узел с хаотичной интранодулярной васкуляризацией.",
-        "riskLevel": "high"
-      },
-      {
-        "requireCystAvascular": true,
-        "conclusion": "Кистозное образование без признаков активного кровотока.",
-        "riskLevel": "benign"
-      },
-      {
-        "requireMacrocalcinate": true,
-        "conclusion": "Выявлено образование с макрокальцинатом.",
-        "riskLevel": "moderate"
       }
     ],
     "lymphRule": {
