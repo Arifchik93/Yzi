@@ -1,9 +1,18 @@
 {
   "thyroidnecklymph": {
+    "recommendationTemplates": {
+      "benignRisk": "Консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО).",
+      "moderateRisk": "Консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ).",
+      "highRisk": "Срочная консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ).",
+      "followUpPrefix": "Контрольное УЗИ"
+    },
+    "followUpMonthsByRisk": {
+      "benign": 12,
+      "moderate": 6,
+      "high": 3
+    },
+    "fallbackConclusion": "По данным УЗИ щитовидной железы и лимфоузлов шеи выраженных патологических изменений не выявлено.",
     "aiitRule": {
-      "blockStartsWith": "Структура паренхимы:",
-      "structureFieldIndex": 0,
-      "echogenicityFieldIndex": 1,
       "structureIncludes": [
         "неоднородная",
         "значительно неоднородная",
@@ -13,22 +22,186 @@
       "echogenicityIncludes": [
         "понижена"
       ],
-      "conclusion": "Признаки АИТ.",
-      "recommendation": "Консультация эндокринолога, дообследование АТТПО, ТТГ."
+      "conclusion": "Признаки аутоиммунного тиреоидита (АИТ).",
+      "recommendation": "Рекомендуется консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО).",
+      "riskLevel": "benign"
     },
+    "diffuseRules": [
+      {
+        "structureIncludes": [
+          "неоднородная",
+          "значительно неоднородная",
+          "диффузно-неоднородная"
+        ],
+        "vascularityIncludes": [
+          "значительно усилена"
+        ],
+        "conclusion": "Диффузные воспалительные изменения щитовидной железы с усиленным кровотоком.",
+        "riskLevel": "moderate"
+      },
+      {
+        "structureIncludes": [
+          "однородная"
+        ],
+        "echogenicityIncludes": [
+          "не изменена"
+        ],
+        "vascularityIncludes": [
+          "не усилена"
+        ],
+        "conclusion": "Эхографически значимых диффузных изменений щитовидной железы не выявлено.",
+        "riskLevel": "benign"
+      },
+      {
+        "structureIncludes": [
+          "неоднородная",
+          "значительно неоднородная"
+        ],
+        "echogenicityIncludes": [
+          "повышена"
+        ],
+        "conclusion": "Диффузные фиброзные изменения паренхимы щитовидной железы.",
+        "riskLevel": "benign"
+      },
+      {
+        "structureIncludes": [
+          "очагово-неоднородная"
+        ],
+        "echogenicityIncludes": [
+          "смешанная"
+        ],
+        "conclusion": "Неоднородные диффузно-очаговые изменения паренхимы щитовидной железы.",
+        "riskLevel": "moderate"
+      },
+      {
+        "structureIncludes": [
+          "значительно неоднородная",
+          "диффузно-неоднородная"
+        ],
+        "vascularityIncludes": [
+          "обеднена"
+        ],
+        "conclusion": "Диффузные изменения щитовидной железы со сниженной перфузией.",
+        "riskLevel": "moderate"
+      }
+    ],
+    "volumeRules": [
+      {
+        "minVolume": 25.01,
+        "conclusion": "Увеличение объема щитовидной железы (признаки диффузного зоба).",
+        "recommendation": "Рекомендуется консультация эндокринолога и контроль гормонов щитовидной железы.",
+        "riskLevel": "moderate"
+      },
+      {
+        "minVolume": 0,
+        "maxVolume": 25,
+        "conclusion": "Объем щитовидной железы в допустимых пределах.",
+        "riskLevel": "benign"
+      }
+    ],
+    "isthmusRules": [
+      {
+        "stateIncludes": [
+          "утолщен"
+        ],
+        "conclusion": "Утолщение перешейка щитовидной железы.",
+        "riskLevel": "moderate"
+      },
+      {
+        "stateIncludes": [
+          "не визуализируется"
+        ],
+        "conclusion": "Послеоперационные изменения в области перешейка щитовидной железы.",
+        "riskLevel": "moderate"
+      }
+    ],
+    "topographyRules": [
+      {
+        "locationIncludes": [
+          "низкое"
+        ],
+        "conclusion": "Низкое расположение щитовидной железы.",
+        "riskLevel": "moderate"
+      },
+      {
+        "locationIncludes": [
+          "загрудин"
+        ],
+        "conclusion": "Щитовидная железа с ретростернальным компонентом.",
+        "recommendation": "Рекомендуется консультация онколога и решение вопроса о дополнительной визуализации по показаниям.",
+        "riskLevel": "moderate"
+      },
+      {
+        "acousticAccessIncludes": [
+          "затрудн"
+        ],
+        "conclusion": "Информативность исследования частично ограничена техническими условиями.",
+        "riskLevel": "moderate"
+      },
+      {
+        "contoursIncludes": [
+          "деформированные",
+          "неровные",
+          "не дифференцируются"
+        ],
+        "conclusion": "Изменения контуров щитовидной железы.",
+        "riskLevel": "moderate"
+      }
+    ],
     "lesionsRule": {
-      "blockTitle": "Объёмные образования",
-      "locationFieldIndex": 0,
-      "typeFieldIndex": 6,
-      "classificationFieldIndex": 7,
-      "skipIfLocationIncludes": "не визуализируются",
-      "locationPrefixToRemove": "визуализируется",
-      "typeCleanupPatterns": [
-        "[\\d\\s*.,]+мм",
-        "[\\d\\s*.,]+см"
-      ],
-      "conclusionPrefix": "Очаговые образования"
+      "conclusionPrefix": "Очаговые образования",
+      "noLesionsConclusion": "Очаговые образования щитовидной железы не выявлены."
     },
+    "noduleRules": [
+      {
+        "tiradsIn": [
+          1,
+          2
+        ],
+        "conclusion": "Определяются доброкачественные очаговые изменения (TI-RADS 1-2).",
+        "riskLevel": "benign"
+      },
+      {
+        "tiradsEquals": 3,
+        "conclusion": "Выявлены узлы умеренной подозрительности (TI-RADS 3).",
+        "riskLevel": "moderate"
+      },
+      {
+        "tiradsEquals": 4,
+        "conclusion": "Выявлены подозрительные узлы (TI-RADS 4).",
+        "riskLevel": "high"
+      },
+      {
+        "tiradsEquals": 5,
+        "conclusion": "Выявлены узлы высокой подозрительности на злокачественный процесс (TI-RADS 5).",
+        "riskLevel": "high"
+      },
+      {
+        "requireVertical": true,
+        "conclusion": "Есть узел с вертикальной ориентацией — признак повышенной онкологической настороженности.",
+        "riskLevel": "high"
+      },
+      {
+        "requireIrregularContours": true,
+        "conclusion": "Есть узел с неровными или нечеткими контурами.",
+        "riskLevel": "high"
+      },
+      {
+        "requireChaoticFlow": true,
+        "conclusion": "Есть узел с хаотичной интранодулярной васкуляризацией.",
+        "riskLevel": "high"
+      },
+      {
+        "requireCystAvascular": true,
+        "conclusion": "Кистозное образование без признаков активного кровотока.",
+        "riskLevel": "benign"
+      },
+      {
+        "requireMacrocalcinate": true,
+        "conclusion": "Выявлено образование с макрокальцинатом.",
+        "riskLevel": "moderate"
+      }
+    ],
     "lymphRule": {
       "predefinedBlockPattern": "^(Яремные|Верхние медиастинальные)",
       "additionalBlockTitle": "Дополнительные лимфоузлы",
@@ -48,10 +221,65 @@
         "гиперплаз"
       ],
       "questionMarkToken": "?",
-      "reactiveConclusion": "Реактивная лимфаденопатия л/у шеи.",
-      "reactiveProbableConclusion": "Вероятно реактивная лимфаденопатия л/у шеи.",
-      "pathologicalFallbackConclusion": "Патологически изменённые л/у шеи.",
-      "pathologicalDetailedPrefix": "Патологически изменённые л/у шеи"
-    }
+      "reactiveConclusion": "Реактивная лимфаденопатия лимфоузлов шеи.",
+      "reactiveRecommendation": "Рекомендуется консультация эндокринолога и контроль по клинической необходимости.",
+      "reactiveRiskLevel": "benign",
+      "reactiveProbableConclusion": "Вероятно реактивная лимфаденопатия лимфоузлов шеи.",
+      "reactiveProbableRecommendation": "Рекомендуется консультация онколога и динамическое наблюдение.",
+      "reactiveProbableRiskLevel": "moderate",
+      "conglomerateConclusion": "Обнаружен конгломерат лимфоузлов шеи.",
+      "pathologicalFallbackConclusion": "Патологически измененные лимфоузлы шеи.",
+      "pathologicalDetailedPrefix": "Патологически измененные лимфоузлы шеи",
+      "pathologicalRecommendation": "Рекомендуется консультация онколога и решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ).",
+      "pathologicalRiskLevel": "high"
+    },
+    "combinedRules": [
+      {
+        "requireAiit": true,
+        "aiitStructureIncludes": [
+          "неоднородная",
+          "значительно неоднородная",
+          "диффузно-неоднородная",
+          "очагово-неоднородная"
+        ],
+        "aiitEchogenicityIncludes": [
+          "понижена"
+        ],
+        "requireTiradsIn": [
+          1,
+          2
+        ],
+        "requireNoPathologicalLymph": true,
+        "conclusion": "Диффузные изменения по типу АИТ сочетаются с доброкачественными очаговыми изменениями.",
+        "riskLevel": "benign"
+      },
+      {
+        "requireAiit": true,
+        "aiitStructureIncludes": [
+          "неоднородная",
+          "значительно неоднородная",
+          "диффузно-неоднородная",
+          "очагово-неоднородная"
+        ],
+        "aiitEchogenicityIncludes": [
+          "понижена"
+        ],
+        "requireTiradsIn": [
+          3
+        ],
+        "conclusion": "Признаки АИТ в сочетании с узлом умеренной подозрительности.",
+        "riskLevel": "moderate"
+      },
+      {
+        "requireTiradsIn": [
+          4,
+          5
+        ],
+        "requirePathologicalLymph": true,
+        "conclusion": "Сочетание подозрительного узла щитовидной железы и патологических лимфоузлов: нельзя исключить злокачественный процесс.",
+        "recommendation": "Рекомендуется срочная консультация онколога и решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ).",
+        "riskLevel": "high"
+      }
+    ]
   }
 }
