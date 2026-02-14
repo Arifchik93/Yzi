@@ -1,0 +1,234 @@
+{
+  "thyroidnecklymph": {
+    "recommendationTemplates": {
+      "benignRisk": "Консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО).",
+      "moderateRisk": "Консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ), анализ крови на кальцитонин.",
+      "highRisk": "Срочная консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ), анализ крови на кальцитонин.",
+      "followUpPrefix": "Контрольное УЗИ"
+    },
+    "followUpMonthsByRisk": {
+      "benign": 12,
+      "moderate": 6,
+      "high": 3
+    },
+    "fallbackConclusion": "По данным УЗИ щитовидной железы и лимфоузлов шеи выраженных патологических изменений не выявлено.",
+    "aiitRule": {
+      "structureIncludes": [
+        "неоднородная",
+        "значительно неоднородная",
+        "диффузно-неоднородная",
+        "очагово-неоднородная"
+      ],
+      "echogenicityIncludes": [
+        "понижена"
+      ],
+      "conclusion": "Признаки аутоиммунного тиреоидита (АИТ).",
+      "recommendation": "Рекомендуется консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО), анализ крови на кальцитонин.",
+      "riskLevel": "benign"
+    },
+    "diffuseRules": [
+      {
+        "structureIncludes": [
+          "неоднородная",
+          "значительно неоднородная",
+          "диффузно-неоднородная"
+        ],
+        "vascularityIncludes": [
+          "значительно усилена"
+        ],
+        "conclusion": "Диффузные воспалительные изменения щитовидной железы с усиленным кровотоком.",
+        "riskLevel": "moderate",
+        "recommendation": "Рекомендуется консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО), анализ крови на кальцитонин."
+      },
+      {
+        "structureIncludes": [
+          "однородная"
+        ],
+        "echogenicityIncludes": [
+          "не изменена"
+        ],
+        "vascularityIncludes": [
+          "не усилена"
+        ],
+        "conclusion": "Эхографически значимых диффузных изменений щитовидной железы не выявлено.",
+        "riskLevel": "benign",
+        "recommendation": "Рекомендуется консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО), анализ крови на кальцитонин."
+      },
+      {
+        "structureIncludes": [
+          "неоднородная",
+          "значительно неоднородная"
+        ],
+        "echogenicityIncludes": [
+          "повышена"
+        ],
+        "conclusion": "Диффузные фиброзные изменения паренхимы щитовидной железы.",
+        "riskLevel": "benign",
+        "recommendation": "Рекомендуется консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО), анализ крови на кальцитонин."
+      },
+      {
+        "structureIncludes": [
+          "очагово-неоднородная"
+        ],
+        "echogenicityIncludes": [
+          "смешанная"
+        ],
+        "conclusion": "Неоднородные диффузно-очаговые изменения паренхимы щитовидной железы.",
+        "riskLevel": "moderate",
+        "recommendation": "Рекомендуется консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО), анализ крови на кальцитонин."
+      },
+      {
+        "structureIncludes": [
+          "значительно неоднородная",
+          "диффузно-неоднородная"
+        ],
+        "vascularityIncludes": [
+          "обеднена"
+        ],
+        "conclusion": "Диффузные изменения щитовидной железы со сниженной перфузией.",
+        "riskLevel": "moderate",
+        "recommendation": "Рекомендуется консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО), анализ крови на кальцитонин."
+      }
+    ],
+    "volumeRules": [],
+    "isthmusRules": [],
+    "topographyRules": [
+      {
+        "locationIncludes": [
+          "низкое"
+        ],
+        "conclusion": "Низкое расположение щитовидной железы.",
+        "riskLevel": "moderate"
+      },
+      {
+        "locationIncludes": [
+          "загрудин"
+        ],
+        "conclusion": "Щитовидная железа с ретростернальным компонентом.",
+        "recommendation": "Рекомендуется консультация онколога и решение вопроса о дополнительной визуализации по показаниям, анализ крови на кальцитонин.",
+        "riskLevel": "moderate"
+      },
+      {
+        "contoursIncludes": [
+          "деформированные",
+          "неровные",
+          "не дифференцируются"
+        ],
+        "conclusion": "Изменения контуров щитовидной железы.",
+        "riskLevel": "moderate"
+      }
+    ],
+    "lesionsRule": {
+      "conclusionPrefix": "Очаговые образования",
+      "noLesionsConclusion": ""
+    },
+    "noduleRules": [
+      {
+        "tiradsIn": [
+          1,
+          2
+        ],
+        "conclusion": "Определяются доброкачественные очаговые изменения (TI-RADS 1-2).",
+        "riskLevel": "benign",
+        "group": "tirads-main"
+      },
+      {
+        "tiradsEquals": 3,
+        "conclusion": "Выявлены узлы умеренной подозрительности (TI-RADS 3).",
+        "riskLevel": "moderate",
+        "group": "tirads-main"
+      },
+      {
+        "tiradsEquals": 4,
+        "conclusion": "Выявлены подозрительные узлы (TI-RADS 4).",
+        "riskLevel": "high",
+        "group": "tirads-main"
+      },
+      {
+        "tiradsEquals": 5,
+        "conclusion": "Выявлены узлы высокой подозрительности на злокачественный процесс (TI-RADS 5).",
+        "riskLevel": "high",
+        "group": "tirads-main"
+      }
+    ],
+    "lymphRule": {
+      "predefinedBlockPattern": "^(Яремные|Верхние медиастинальные)",
+      "additionalBlockTitle": "Дополнительные лимфоузлы",
+      "additionalGroupFieldIndex": 0,
+      "additionalAmountFieldIndex": 1,
+      "additionalSideFieldIndex": 2,
+      "additionalMorphologyFieldIndex": 3,
+      "additionalVascularFieldIndex": 4,
+      "additionalKmdFieldIndex": 5,
+      "additionalStatusFieldIndex": 6,
+      "amountFieldIndex": 0,
+      "statusFieldIndex": 4,
+      "normalAmountToken": "визуально не изменены",
+      "pathologicalToken": "патологический",
+      "reactiveTokens": [
+        "реактив",
+        "гиперплаз"
+      ],
+      "questionMarkToken": "?",
+      "reactiveConclusion": "Реактивная лимфаденопатия лимфоузлов шеи.",
+      "reactiveRecommendation": "Рекомендуется консультация эндокринолога и контроль по клинической необходимости.",
+      "reactiveRiskLevel": "benign",
+      "reactiveProbableConclusion": "Вероятно реактивная лимфаденопатия лимфоузлов шеи.",
+      "reactiveProbableRecommendation": "Рекомендуется консультация онколога и динамическое наблюдение, анализ крови на кальцитонин.",
+      "reactiveProbableRiskLevel": "moderate",
+      "conglomerateConclusion": "Обнаружен конгломерат лимфоузлов шеи.",
+      "pathologicalFallbackConclusion": "Патологически измененные лимфоузлы шеи.",
+      "pathologicalDetailedPrefix": "Патологически измененные лимфоузлы шеи",
+      "pathologicalRecommendation": "Рекомендуется консультация онколога и решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ), анализ крови на кальцитонин.",
+      "pathologicalRiskLevel": "high"
+    },
+    "combinedRules": [
+      {
+        "requireAiit": true,
+        "aiitStructureIncludes": [
+          "неоднородная",
+          "значительно неоднородная",
+          "диффузно-неоднородная",
+          "очагово-неоднородная"
+        ],
+        "aiitEchogenicityIncludes": [
+          "понижена"
+        ],
+        "requireTiradsIn": [
+          1,
+          2
+        ],
+        "requireNoPathologicalLymph": true,
+        "conclusion": "Диффузные изменения по типу АИТ сочетаются с доброкачественными очаговыми изменениями.",
+        "riskLevel": "benign"
+      },
+      {
+        "requireAiit": true,
+        "aiitStructureIncludes": [
+          "неоднородная",
+          "значительно неоднородная",
+          "диффузно-неоднородная",
+          "очагово-неоднородная"
+        ],
+        "aiitEchogenicityIncludes": [
+          "понижена"
+        ],
+        "requireTiradsIn": [
+          3
+        ],
+        "conclusion": "Признаки АИТ в сочетании с узлом умеренной подозрительности.",
+        "riskLevel": "moderate"
+      },
+      {
+        "requireTiradsIn": [
+          4,
+          5
+        ],
+        "requirePathologicalLymph": true,
+        "conclusion": "Сочетание подозрительного узла щитовидной железы и патологических лимфоузлов: нельзя исключить злокачественный процесс.",
+        "recommendation": "Рекомендуется срочная консультация онколога и решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ), анализ крови на кальцитонин.",
+        "riskLevel": "high"
+      }
+    ]
+  }
+}

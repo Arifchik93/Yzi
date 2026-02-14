@@ -38,6 +38,8 @@ let currentBlocks = [];
 const textMeasureCanvas = document.createElement("canvas");
 let editorTemplateLabel = "";
 const localTemplatePrefix = "local-template-";
+const conclusionRulesFile = "conclusionRules.json";
+let conclusionRulesConfig = {};
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -66,6 +68,21 @@ async function loadTemplate(protocolId, { bustCache = false } = {}) {
   const data = await response.json();
   templateCache.set(protocol.file, data);
   return data;
+}
+
+
+async function loadConclusionRules() {
+  try {
+    const response = await fetch(`${conclusionRulesFile}?v=${Date.now()}`);
+    if (!response.ok) {
+      conclusionRulesConfig = {};
+      return;
+    }
+    const parsed = await response.json();
+    conclusionRulesConfig = parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    conclusionRulesConfig = {};
+  }
 }
 
 function normalizeBlocks(template) {
@@ -385,8 +402,545 @@ function updateOutput() {
     })
     .join("");
 
-  protocolOutput.value = text.trim();
+  const conclusion = buildAutoConclusion(currentBlocks, protocolSelect.value, conclusionRulesConfig);
+  const textWithConclusion = conclusion ? `${text.trim()}\n\n${conclusion}` : text.trim();
+
+  protocolOutput.value = textWithConclusion;
   resizeTextarea(protocolOutput);
+}
+
+function getFieldValues(row) {
+  return row.segments
+    .filter((segment) => segment.type === "field")
+    .map((segment) => (segment.value || "").trim());
+}
+
+function normalizeSpaces(value) {
+  return (value || "").replace(/\s+/g, " ").trim();
+}
+
+function buildAutoConclusion(blocks, protocolId, rulesConfig) {
+  const protocolRules = rulesConfig?.[protocolId];
+  if (!protocolRules) {
+    return "";
+  }
+
+  const conclusions = [];
+  const recommendationParts = [];
+  let maxRiskLevel = "benign";
+
+  const pushConclusion = (value) => {
+    if (!value) return;
+    if (!conclusions.includes(value)) {
+      conclusions.push(value);
+    }
+  };
+
+  const setRisk = (risk) => {
+    const order = { benign: 1, moderate: 2, high: 3 };
+    if ((order[risk] || 1) > (order[maxRiskLevel] || 1)) {
+      maxRiskLevel = risk;
+    }
+  };
+
+  const context = collectThyroidContext(blocks, protocolRules);
+
+  applyAiitRule(context, protocolRules.aiitRule, pushConclusion, recommendationParts, setRisk);
+  applyDiffuseRules(context, protocolRules.diffuseRules || [], pushConclusion, recommendationParts, setRisk);
+  applyVolumeRules(context, protocolRules.volumeRules || [], pushConclusion, recommendationParts, setRisk);
+  applyIsthmusRules(context, protocolRules.isthmusRules || [], pushConclusion, recommendationParts, setRisk);
+  applyTopographyRules(context, protocolRules.topographyRules || [], pushConclusion, recommendationParts, setRisk);
+  applyLesionsRule(context, protocolRules.lesionsRule, pushConclusion);
+  applyNoduleRules(context, protocolRules.noduleRules || [], pushConclusion, recommendationParts, setRisk);
+  applyLymphRule(context, protocolRules.lymphRule, pushConclusion, recommendationParts, setRisk);
+  applyCombinedRules(context, protocolRules.combinedRules || [], pushConclusion, recommendationParts, setRisk);
+
+  if (!conclusions.length) {
+    const fallback = protocolRules.fallbackConclusion || "Значимых изменений по данным УЗИ не выявлено.";
+    conclusions.push(fallback);
+  }
+
+  const recommendation = buildPatientRecommendation(
+    protocolRules,
+    maxRiskLevel,
+    recommendationParts
+  );
+
+  const sections = [`Заключение: ${conclusions.join(" ")}`];
+  if (recommendation) {
+    sections.push(`Рекомендации: ${recommendation}`);
+  }
+
+  return sections.join("\n");
+}
+
+function collectThyroidContext(blocks, protocolRules) {
+  const context = {
+    blocks,
+    parenchyma: { structure: "", echogenicity: "" },
+    vascularity: "",
+    location: "",
+    acousticAccess: "",
+    contours: "",
+    isthmus: { thickness: null, state: "" },
+    totalVolume: null,
+    lesions: [],
+    hasLesions: false,
+    maxTirads: 0,
+    lymphRows: [],
+    hasPathologicalLymph: false,
+    hasPathologicalQuestionLymph: false,
+    hasReactiveQuestionLymph: false,
+    allLymphReactive: false,
+  };
+
+  const parenchymaBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Структура паренхимы:")
+  );
+  if (parenchymaBlock?.rows?.[0]) {
+    const fields = getFieldValues(parenchymaBlock.rows[0]);
+    context.parenchyma.structure = fields[0] || "";
+    context.parenchyma.echogenicity = fields[1] || "";
+  }
+
+  const vascularityBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Васкуляризация в режиме ЦДК")
+  );
+  if (vascularityBlock?.rows?.[0]) {
+    context.vascularity = getFieldValues(vascularityBlock.rows[0])[0] || "";
+  }
+
+  const locationBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Расположение:")
+  );
+  if (locationBlock?.rows?.[0]) {
+    context.location = getFieldValues(locationBlock.rows[0])[0] || "";
+  }
+
+  const acousticBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Акустический доступ:")
+  );
+  if (acousticBlock?.rows?.[0]) {
+    context.acousticAccess = getFieldValues(acousticBlock.rows[0])[0] || "";
+  }
+
+  const contoursBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Контуры:")
+  );
+  if (contoursBlock?.rows?.[0]) {
+    context.contours = getFieldValues(contoursBlock.rows[0])[0] || "";
+  }
+
+  const isthmusBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Перешеек:")
+  );
+  if (isthmusBlock?.rows?.[0]) {
+    const rowText = assembleRow(isthmusBlock.rows[0]);
+    context.isthmus.thickness = extractFirstNumber(rowText);
+    context.isthmus.state = getFieldValues(isthmusBlock.rows[0])[0] || "";
+  }
+
+  const totalVolumeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Общий объем:")
+  );
+  if (totalVolumeBlock?.rows?.[0]) {
+    const rowText = assembleRow(totalVolumeBlock.rows[0]);
+    context.totalVolume = extractFirstNumber(rowText);
+  }
+
+  const lesionBlock = blocks.find((block) => block.title === "Объёмные образования");
+  context.lesions = collectLesions(lesionBlock?.rows || []);
+  context.hasLesions = context.lesions.length > 0;
+  context.maxTirads = context.lesions.reduce((max, item) => Math.max(max, item.tirads || 0), 0);
+
+  context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
+  const significantLymph = context.lymphRows.filter(({ fields }) => {
+    const amount = fields?.[0] || "";
+    return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
+  });
+  const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
+  context.hasPathologicalLymph = statuses.some((status) => status.includes("патологический") && !status.includes("?"));
+  context.hasPathologicalQuestionLymph = statuses.some((status) => status.includes("патологический?"));
+  context.hasReactiveQuestionLymph = statuses.some((status) =>
+    (status.includes("реактив") || status.includes("гиперплаз")) && status.includes("?")
+  );
+  context.allLymphReactive = statuses.length > 0 && statuses.every((status) => status.includes("реактив") || status.includes("гиперплаз"));
+
+  return context;
+}
+
+function extractFirstNumber(value) {
+  const match = (value || "").replace(',', '.').match(/-?\d+(?:\.\d+)?/);
+  return match ? Number.parseFloat(match[0]) : null;
+}
+
+function collectLesions(rows) {
+  return rows
+    .map((row) => getFieldValues(row))
+    .filter((fields) => fields.length >= 8)
+    .filter((fields) => {
+      const location = fields[0] || "";
+      return location && !location.includes("не визуализируются");
+    })
+    .map((fields) => {
+      const location = normalizeSpaces((fields[0] || "").replace(/^визуализируется\s*/i, ""));
+      const contour = normalizeSpaces(fields[1] || "");
+      const composition = normalizeSpaces(fields[2] || "");
+      const echogenicity = normalizeSpaces(fields[3] || "");
+      const orientation = normalizeSpaces(fields[4] || "");
+      const vascularity = normalizeSpaces(fields[5] || "");
+      const rawType = normalizeSpaces(fields[6] || "");
+      const type = normalizeSpaces(
+        rawType
+          .replace(/[\d\s*.,]+мм/gi, "")
+          .replace(/[\d\s*.,]+см/gi, "")
+      );
+      const classification = normalizeSpaces(fields[7] || "");
+      const tiradsMatch = classification.match(/TI-RADS\s*(\d)/i);
+      const tirads = tiradsMatch ? Number.parseInt(tiradsMatch[1], 10) : 0;
+
+      return {
+        location,
+        contour,
+        composition,
+        echogenicity,
+        orientation,
+        vascularity,
+        rawType,
+        type,
+        classification,
+        tirads,
+      };
+    });
+}
+
+function applyAiitRule(context, rule, pushConclusion, recommendationParts, setRisk) {
+  if (!rule) return;
+  const structure = context.parenchyma.structure;
+  const echogenicity = context.parenchyma.echogenicity;
+
+  const structureMatch = (rule.structureIncludes || []).some((token) => structure.includes(token));
+  const echogenicityMatch = (rule.echogenicityIncludes || []).some((token) => echogenicity.includes(token));
+
+  if (!structureMatch || !echogenicityMatch) return;
+  pushConclusion(rule.conclusion);
+  if (rule.recommendation) recommendationParts.push(rule.recommendation);
+  setRisk(rule.riskLevel || "benign");
+}
+
+function applyDiffuseRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  rules.forEach((rule) => {
+    if (!rule) return;
+    const structure = context.parenchyma.structure;
+    const echogenicity = context.parenchyma.echogenicity;
+    const vascularity = context.vascularity;
+
+    const structureOk = !rule.structureIncludes || rule.structureIncludes.some((token) => structure.includes(token));
+    const echogenicityOk = !rule.echogenicityIncludes || rule.echogenicityIncludes.some((token) => echogenicity.includes(token));
+    const vascularityOk = !rule.vascularityIncludes || rule.vascularityIncludes.some((token) => vascularity.includes(token));
+
+    if (!(structureOk && echogenicityOk && vascularityOk)) return;
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "benign");
+  });
+}
+
+function applyVolumeRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  rules.forEach((rule) => {
+    if (!rule) return;
+    const volume = context.totalVolume;
+    if (volume == null) return;
+    const minOk = rule.minVolume == null || volume >= rule.minVolume;
+    const maxOk = rule.maxVolume == null || volume <= rule.maxVolume;
+    if (!(minOk && maxOk)) return;
+
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "benign");
+  });
+}
+
+function applyIsthmusRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  rules.forEach((rule) => {
+    if (!rule) return;
+    const state = context.isthmus.state;
+    const stateOk = !rule.stateIncludes || rule.stateIncludes.some((token) => state.includes(token));
+    if (!stateOk) return;
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "benign");
+  });
+}
+
+function applyTopographyRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  rules.forEach((rule) => {
+    if (!rule) return;
+
+    const locationOk = !rule.locationIncludes || rule.locationIncludes.some((token) => context.location.includes(token));
+    const accessOk = !rule.acousticAccessIncludes || rule.acousticAccessIncludes.some((token) => context.acousticAccess.includes(token));
+    const contourOk = !rule.contoursIncludes || rule.contoursIncludes.some((token) => context.contours.includes(token));
+
+    if (!(locationOk && accessOk && contourOk)) return;
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "benign");
+  });
+}
+
+function applyLesionsRule(context, rule, pushConclusion) {
+  if (!rule) return;
+  if (!context.hasLesions) {
+    if (rule.noLesionsConclusion) {
+      pushConclusion(rule.noLesionsConclusion);
+    }
+    return;
+  }
+
+  const items = context.lesions
+    .map((item) => [item.location, item.type, item.classification].filter(Boolean).join(", "))
+    .filter(Boolean);
+
+  if (!items.length) return;
+  const prefix = rule.conclusionPrefix || "Очаговые образования";
+  pushConclusion(`${prefix}: ${items.join("; ")}.`);
+}
+
+function applyNoduleRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  const mainTiradsRules = rules.filter((rule) => rule?.group === "tirads-main");
+  const otherRules = rules.filter((rule) => rule?.group !== "tirads-main");
+
+  if (mainTiradsRules.length) {
+    const matchedMainRules = mainTiradsRules.filter((rule) => {
+      const hasTirads = rule.tiradsEquals
+        ? context.lesions.some((item) => item.tirads === rule.tiradsEquals)
+        : true;
+      const hasTiradsIn = rule.tiradsIn
+        ? context.lesions.some((item) => rule.tiradsIn.includes(item.tirads))
+        : true;
+      return hasTirads && hasTiradsIn;
+    });
+
+    if (matchedMainRules.length) {
+      const pickScore = (rule) => {
+        if (rule.tiradsEquals != null) return rule.tiradsEquals;
+        if (Array.isArray(rule.tiradsIn) && rule.tiradsIn.length) {
+          return Math.max(...rule.tiradsIn);
+        }
+        return 0;
+      };
+
+      const bestRule = matchedMainRules.sort((a, b) => pickScore(b) - pickScore(a))[0];
+      pushConclusion(bestRule.conclusion);
+      if (bestRule.recommendation) recommendationParts.push(bestRule.recommendation);
+      setRisk(bestRule.riskLevel || "benign");
+    }
+  }
+
+  otherRules.forEach((rule) => {
+    if (!rule) return;
+
+    const hasTirads = rule.tiradsEquals ? context.lesions.some((item) => item.tirads === rule.tiradsEquals) : true;
+    const hasTiradsIn = rule.tiradsIn ? context.lesions.some((item) => rule.tiradsIn.includes(item.tirads)) : true;
+    const hasVertical = rule.requireVertical ? context.lesions.some((item) => item.orientation.includes("вертикально")) : true;
+    const hasIrregularContours = rule.requireIrregularContours
+      ? context.lesions.some((item) => item.contour.includes("неров") || item.contour.includes("нечет"))
+      : true;
+    const hasChaoticFlow = rule.requireChaoticFlow
+      ? context.lesions.some((item) => item.vascularity.includes("хаот"))
+      : true;
+    const hasCystAvascular = rule.requireCystAvascular
+      ? context.lesions.some((item) => item.type.includes("киста") && item.vascularity.includes("аваск"))
+      : true;
+    const hasMacrocalcinate = rule.requireMacrocalcinate
+      ? context.lesions.some((item) => item.type.includes("макрокальцинат"))
+      : true;
+
+    if (!(hasTirads && hasTiradsIn && hasVertical && hasIrregularContours && hasChaoticFlow && hasCystAvascular && hasMacrocalcinate)) {
+      return;
+    }
+
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "benign");
+  });
+}
+
+function collectLymphRows(blocks, rule) {
+  const result = [];
+  const regex = new RegExp(rule.predefinedBlockPattern || "^$", "i");
+
+  blocks
+    .filter((block) => block.type === "text" && regex.test(block.content || ""))
+    .forEach((block) => {
+      const fields = getFieldValues(block.rows[0] || { segments: [] });
+      const group = normalizeSpaces((block.content || "").split("{")[0]);
+      result.push({ group, fields });
+    });
+
+  const additionalBlock = blocks.find((block) => block.title === rule.additionalBlockTitle);
+  (additionalBlock?.rows || []).forEach((row) => {
+    const fields = getFieldValues(row);
+    if (!fields.length || !fields[rule.additionalGroupFieldIndex ?? 0]) return;
+
+    const side = fields[rule.additionalSideFieldIndex ?? 2] || "";
+    const group = normalizeSpaces(
+      `${fields[rule.additionalGroupFieldIndex ?? 0]}${side ? ` ${side}` : ""}`
+    );
+
+    result.push({
+      group,
+      fields: [
+        fields[rule.additionalAmountFieldIndex ?? 1],
+        fields[rule.additionalMorphologyFieldIndex ?? 3],
+        fields[rule.additionalVascularFieldIndex ?? 4],
+        fields[rule.additionalKmdFieldIndex ?? 5],
+        fields[rule.additionalStatusFieldIndex ?? 6],
+      ],
+    });
+  });
+
+  return result;
+}
+
+function applyLymphRule(context, rule, pushConclusion, recommendationParts, setRisk) {
+  if (!rule) return;
+  const significantRows = context.lymphRows
+    .filter(({ fields }) => fields?.length >= 5)
+    .filter(({ fields }) => {
+      const amount = fields[rule.amountFieldIndex ?? 0] || "";
+      return amount && !amount.includes(rule.normalAmountToken || "визуально не изменены");
+    });
+
+  if (!significantRows.length) {
+    return;
+  }
+
+  const statuses = significantRows.map(({ fields }) =>
+    normalizeSpaces((fields[rule.statusFieldIndex ?? 4] || "").toLowerCase())
+  );
+
+  const pathologicalToken = rule.pathologicalToken || "патологический";
+  const reactiveTokens = rule.reactiveTokens || ["реактив", "гиперплаз"];
+  const questionableToken = rule.questionMarkToken || "?";
+
+  const hasPathological = statuses.some((status) => status.includes(pathologicalToken));
+  const allReactive = statuses.every((status) =>
+    reactiveTokens.some((token) => status.includes(token))
+  );
+  const hasQuestionable = statuses.some((status) => status.includes(questionableToken));
+  const hasConglomerate = significantRows.some(({ fields }) =>
+    normalizeSpaces(fields[rule.amountFieldIndex ?? 0] || "").includes("конгломерат")
+  );
+
+  if (!hasPathological && allReactive && !hasQuestionable && rule.reactiveConclusion) {
+    pushConclusion(rule.reactiveConclusion);
+    if (rule.reactiveRecommendation) recommendationParts.push(rule.reactiveRecommendation);
+    setRisk(rule.reactiveRiskLevel || "benign");
+    return;
+  }
+
+  if (!hasPathological && allReactive && hasQuestionable && rule.reactiveProbableConclusion) {
+    pushConclusion(rule.reactiveProbableConclusion);
+    if (rule.reactiveProbableRecommendation) recommendationParts.push(rule.reactiveProbableRecommendation);
+    setRisk(rule.reactiveProbableRiskLevel || "moderate");
+    return;
+  }
+
+  const details = significantRows
+    .filter(({ fields }) =>
+      normalizeSpaces((fields[rule.statusFieldIndex ?? 4] || "").toLowerCase()).includes(pathologicalToken)
+    )
+    .map(({ group, fields }) => {
+      const amount = normalizeSpaces(fields[rule.amountFieldIndex ?? 0] || "");
+      const status = normalizeSpaces(fields[rule.statusFieldIndex ?? 4] || "");
+      return `${amount} ${group} (${status})`;
+    })
+    .filter(Boolean);
+
+  if (hasConglomerate && rule.conglomerateConclusion) {
+    pushConclusion(rule.conglomerateConclusion);
+  }
+
+  if (!details.length) {
+    if (rule.pathologicalFallbackConclusion) {
+      pushConclusion(rule.pathologicalFallbackConclusion);
+      if (rule.pathologicalRecommendation) recommendationParts.push(rule.pathologicalRecommendation);
+      setRisk(rule.pathologicalRiskLevel || "high");
+    }
+    return;
+  }
+
+  const prefix = rule.pathologicalDetailedPrefix || "Патологически изменённые л/у шеи";
+  pushConclusion(`${prefix}: ${details.join("; ")}.`);
+  if (rule.pathologicalRecommendation) recommendationParts.push(rule.pathologicalRecommendation);
+  setRisk(rule.pathologicalRiskLevel || "high");
+}
+
+function applyCombinedRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  rules.forEach((rule) => {
+    if (!rule) return;
+
+    const aiitMatch =
+      !rule.requireAiit ||
+      ((rule.aiitStructureIncludes || []).some((token) => context.parenchyma.structure.includes(token)) &&
+        (rule.aiitEchogenicityIncludes || []).some((token) => context.parenchyma.echogenicity.includes(token)));
+
+    const tiradsMatch = !rule.requireTiradsIn || context.lesions.some((item) => rule.requireTiradsIn.includes(item.tirads));
+    const noPathologicalLymphMatch = !rule.requireNoPathologicalLymph || !context.hasPathologicalLymph;
+    const pathologicalLymphMatch = !rule.requirePathologicalLymph || context.hasPathologicalLymph || context.hasPathologicalQuestionLymph;
+
+    if (!(aiitMatch && tiradsMatch && noPathologicalLymphMatch && pathologicalLymphMatch)) {
+      return;
+    }
+
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "moderate");
+  });
+}
+
+function buildPatientRecommendation(protocolRules, riskLevel, recommendationParts) {
+  const templates = protocolRules.recommendationTemplates || {};
+  const followUpMonthsByRisk = protocolRules.followUpMonthsByRisk || { benign: 12, moderate: 6, high: 3 };
+
+  const followUpMonths = followUpMonthsByRisk[riskLevel] || 12;
+  const isOncoRisk = riskLevel === "moderate" || riskLevel === "high";
+
+  const uniqueParts = recommendationParts
+    .filter((value, index, arr) => value && arr.indexOf(value) === index)
+    .filter((value) => {
+      const normalized = value.toLowerCase();
+      if (isOncoRisk && normalized.includes("консультация онколога")) {
+        return false;
+      }
+      if (!isOncoRisk && normalized.includes("консультация эндокринолога")) {
+        return false;
+      }
+      return true;
+    });
+
+  if (riskLevel === "high") {
+    uniqueParts.unshift(
+      templates.highRisk ||
+        "Срочная консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ)."
+    );
+  } else if (riskLevel === "moderate") {
+    uniqueParts.unshift(
+      templates.moderateRisk ||
+        "Консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ)."
+    );
+  } else {
+    uniqueParts.unshift(
+      templates.benignRisk ||
+        "Консультация эндокринолога и дообследование: ТТГ, свободный Т4, антитела к тиреопероксидазе (АТ к ТПО)."
+    );
+  }
+
+  const followUpText = (templates.followUpPrefix || "Контрольное УЗИ") + ` через ${followUpMonths} мес.`;
+  uniqueParts.push(followUpText);
+
+  return uniqueParts.filter(Boolean).join(" ");
 }
 
 function renderField(segment, onChange) {
@@ -739,7 +1293,10 @@ async function handleProtocolChange() {
 protocolSelect.addEventListener("change", handleProtocolChange);
 
 populateProtocolOptions();
-handleProtocolChange();
+(async () => {
+  await loadConclusionRules();
+  await handleProtocolChange();
+})();
 
 function resizeTextarea(textarea) {
   textarea.style.height = "auto";
@@ -832,6 +1389,7 @@ async function handleTemplateAction(action) {
     loadStatus.textContent = "Обновление...";
     clearLocalTemplate(protocol.id);
     templateCache.delete(protocol.file);
+    await loadConclusionRules();
     const template = await loadTemplate(protocol.id, { bustCache: true });
     applyTemplate(template);
     loadStatus.textContent = "Готово";
