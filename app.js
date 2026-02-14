@@ -1008,6 +1008,18 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
     })
     .filter(Boolean);
 
+  const reactiveDetails = significantRows
+    .filter(({ fields }) => {
+      const status = normalizeSpaces((fields[rule.statusFieldIndex ?? 4] || "").toLowerCase());
+      return reactiveTokens.some((token) => status.includes(token));
+    })
+    .map(({ group, fields }) => {
+      const amount = normalizeSpaces(fields[rule.amountFieldIndex ?? 0] || "");
+      const status = normalizeSpaces(fields[rule.statusFieldIndex ?? 4] || "");
+      return `${amount} ${group} (${status})`;
+    })
+    .filter(Boolean);
+
   if (hasConglomerate && rule.conglomerateConclusion) {
     pushConclusion(rule.conglomerateConclusion);
   }
@@ -1023,6 +1035,12 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
 
   const prefix = rule.pathologicalDetailedPrefix || "Патологически изменённые л/у шеи";
   pushConclusion(`${prefix}: ${details.join("; ")}.`);
+
+  if (reactiveDetails.length) {
+    const reactivePrefix = rule.reactiveAdditionalPrefix || "Также реактивно измененные лимфоузлы";
+    pushConclusion(`${reactivePrefix}: ${reactiveDetails.join("; ")}.`);
+  }
+
   if (rule.pathologicalRecommendation) recommendationParts.push(rule.pathologicalRecommendation);
   setRisk(rule.pathologicalRiskLevel || "high");
 }
@@ -1104,10 +1122,17 @@ function buildPatientRecommendation(protocolRules, riskLevel, recommendationPart
   const followUpMonths = followUpMonthsByRisk[riskLevel] || 12;
   const isOncoRisk = riskLevel === "moderate" || riskLevel === "high";
 
+  const hasUrgentRecommendation = recommendationParts.some((value) =>
+    (value || "").toLowerCase().includes("сроч")
+  );
+
   const uniqueParts = recommendationParts
     .filter((value, index, arr) => value && arr.indexOf(value) === index)
     .filter((value) => {
       const normalized = value.toLowerCase();
+      if (hasUrgentRecommendation && normalized.includes("консультация онколога") && !normalized.includes("сроч")) {
+        return false;
+      }
       if (isOncoRisk && normalized.includes("консультация онколога") && !normalized.includes("сроч")) {
         return false;
       }
@@ -1118,10 +1143,12 @@ function buildPatientRecommendation(protocolRules, riskLevel, recommendationPart
     });
 
   if (riskLevel === "high") {
-    uniqueParts.unshift(
-      templates.highRisk ||
-        "Срочная консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ)."
-    );
+    if (!hasUrgentRecommendation) {
+      uniqueParts.unshift(
+        templates.highRisk ||
+          "Консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ)."
+      );
+    }
   } else if (riskLevel === "moderate") {
     uniqueParts.unshift(
       templates.moderateRisk ||

@@ -331,7 +331,8 @@
       "pathologicalFallbackConclusion": "Выявлены патологически измененные регионарные лимфоузлы.",
       "pathologicalDetailedPrefix": "Патологически измененные регионарные лимфоузлы",
       "pathologicalRecommendation": "Консультация онколога-маммолога, решение вопроса о дообследовании.",
-      "pathologicalRiskLevel": "high"
+      "pathologicalRiskLevel": "high",
+      "reactiveAdditionalPrefix": "Также реактивные изменения регионарных лимфоузлов"
     },
     "combinedRules": []
   }
