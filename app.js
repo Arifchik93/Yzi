@@ -443,13 +443,17 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
     }
   };
 
-  const context = collectThyroidContext(blocks, protocolRules);
+  const context = protocolId === "breast"
+    ? collectBreastContext(blocks, protocolRules)
+    : collectThyroidContext(blocks, protocolRules);
 
   applyAiitRule(context, protocolRules.aiitRule, pushConclusion, recommendationParts, setRisk);
   applyDiffuseRules(context, protocolRules.diffuseRules || [], pushConclusion, recommendationParts, setRisk);
   applyVolumeRules(context, protocolRules.volumeRules || [], pushConclusion, recommendationParts, setRisk);
   applyIsthmusRules(context, protocolRules.isthmusRules || [], pushConclusion, recommendationParts, setRisk);
   applyTopographyRules(context, protocolRules.topographyRules || [], pushConclusion, recommendationParts, setRisk);
+  applyDuctRules(context, protocolRules.ductRules || [], pushConclusion, recommendationParts, setRisk);
+  applyMorphotypeRules(context, protocolRules.morphotypeRules || [], pushConclusion, recommendationParts, setRisk);
   applyLesionsRule(context, protocolRules.lesionsRule, pushConclusion);
   applyNoduleRules(context, protocolRules.noduleRules || [], pushConclusion, recommendationParts, setRisk);
   applyLymphRule(context, protocolRules.lymphRule, pushConclusion, recommendationParts, setRisk);
@@ -569,6 +573,65 @@ function collectThyroidContext(blocks, protocolRules) {
   return context;
 }
 
+function collectBreastContext(blocks, protocolRules) {
+  const context = {
+    blocks,
+    lesions: [],
+    hasLesions: false,
+    maxTirads: 0,
+    maxBirads: 0,
+    morphotype: "",
+    ducts: "",
+    lesionSides: new Set(),
+    lesionQuadrants: new Set(),
+    lymphRows: [],
+    hasPathologicalLymph: false,
+    hasPathologicalQuestionLymph: false,
+    hasReactiveQuestionLymph: false,
+    allLymphReactive: false,
+  };
+
+  const morphotypeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Ультразвуковой морфотип:")
+  );
+  if (morphotypeBlock?.rows?.[0]) {
+    context.morphotype = getFieldValues(morphotypeBlock.rows[0])[0] || "";
+  }
+
+  const ductsBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Млечные протоки:")
+  );
+  if (ductsBlock?.rows?.[0]) {
+    context.ducts = getFieldValues(ductsBlock.rows[0])[0] || "";
+  }
+
+  const lesionBlock = blocks.find((block) => block.title === "Выявленные образования");
+  context.lesions = collectLesions(lesionBlock?.rows || []);
+  context.hasLesions = context.lesions.length > 0;
+  context.maxBirads = context.lesions.reduce((max, item) => Math.max(max, item.birads || 0), 0);
+
+  context.lesions.forEach((item) => {
+    if (item.side) context.lesionSides.add(item.side);
+    if (item.quadrant) context.lesionQuadrants.add(item.quadrant);
+  });
+
+  context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
+  const significantLymph = context.lymphRows.filter(({ fields }) => {
+    const amount = fields?.[0] || "";
+    return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
+  });
+
+  const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
+  context.hasPathologicalLymph = statuses.some((status) => status.includes("патологический") && !status.includes("?"));
+  context.hasPathologicalQuestionLymph = statuses.some((status) => status.includes("патологический?"));
+  context.hasReactiveQuestionLymph = statuses.some((status) =>
+    (status.includes("реактив") || status.includes("гиперплаз")) && status.includes("?")
+  );
+  context.allLymphReactive = statuses.length > 0 && statuses.every((status) => status.includes("реактив") || status.includes("гиперплаз"));
+
+  return context;
+}
+
 function extractFirstNumber(value) {
   const match = (value || "").replace(',', '.').match(/-?\d+(?:\.\d+)?/);
   return match ? Number.parseFloat(match[0]) : null;
@@ -578,11 +641,44 @@ function collectLesions(rows) {
   return rows
     .map((row) => getFieldValues(row))
     .filter((fields) => fields.length >= 8)
-    .filter((fields) => {
-      const location = fields[0] || "";
-      return location && !location.includes("не визуализируются");
-    })
     .map((fields) => {
+      const isBreastRow = fields.length >= 9 || /BI-RADS/i.test(fields[fields.length - 1] || "");
+
+      if (isBreastRow) {
+        const quadrant = normalizeSpaces(fields[0] || "");
+        const location = normalizeSpaces(fields[1] || "");
+        const contour = normalizeSpaces(fields[2] || "");
+        const composition = normalizeSpaces(fields[3] || "");
+        const echogenicity = normalizeSpaces(fields[4] || "");
+        const orientation = normalizeSpaces(fields[5] || "");
+        const vascularity = normalizeSpaces(fields[6] || "");
+        const rawType = normalizeSpaces(fields[7] || "");
+        const type = normalizeSpaces(rawType.replace(/[()]/g, ""));
+        const classification = normalizeSpaces(fields[8] || "");
+        const biradsMatch = classification.match(/BI-RADS\s*(\d)/i);
+        const birads = biradsMatch ? Number.parseInt(biradsMatch[1], 10) : 0;
+
+        let side = "";
+        if (location.toLowerCase().includes("левой")) side = "left";
+        if (location.toLowerCase().includes("правой")) side = "right";
+
+        return {
+          quadrant,
+          location: [quadrant, location].filter(Boolean).join(", "),
+          side,
+          contour,
+          composition,
+          echogenicity,
+          orientation,
+          vascularity,
+          rawType,
+          type,
+          classification,
+          birads,
+          tirads: 0,
+        };
+      }
+
       const location = normalizeSpaces((fields[0] || "").replace(/^визуализируется\s*/i, ""));
       const contour = normalizeSpaces(fields[1] || "");
       const composition = normalizeSpaces(fields[2] || "");
@@ -600,6 +696,8 @@ function collectLesions(rows) {
       const tirads = tiradsMatch ? Number.parseInt(tiradsMatch[1], 10) : 0;
 
       return {
+        quadrant: "",
+        side: "",
         location,
         contour,
         composition,
@@ -610,8 +708,10 @@ function collectLesions(rows) {
         type,
         classification,
         tirads,
+        birads: 0,
       };
-    });
+    })
+    .filter((item) => item.location && !item.location.includes("не визуализируются"));
 }
 
 function applyAiitRule(context, rule, pushConclusion, recommendationParts, setRisk) {
@@ -688,6 +788,33 @@ function applyTopographyRules(context, rules, pushConclusion, recommendationPart
   });
 }
 
+function applyDuctRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  rules.forEach((rule) => {
+    if (!rule) return;
+    const ducts = context.ducts || "";
+    const ductsOk = !rule.ductsIncludes || rule.ductsIncludes.some((token) => ducts.includes(token));
+    if (!ductsOk) return;
+
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "benign");
+  });
+}
+
+function applyMorphotypeRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  rules.forEach((rule) => {
+    if (!rule) return;
+    const morphotype = context.morphotype || "";
+    const morphotypeOk = !rule.morphotypeIncludes || rule.morphotypeIncludes.some((token) => morphotype.includes(token));
+    const noLesionsOk = !rule.requireNoLesions || !context.hasLesions;
+    if (!(morphotypeOk && noLesionsOk)) return;
+
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "benign");
+  });
+}
+
 function applyLesionsRule(context, rule, pushConclusion) {
   if (!rule) return;
   if (!context.hasLesions) {
@@ -707,42 +834,17 @@ function applyLesionsRule(context, rule, pushConclusion) {
 }
 
 function applyNoduleRules(context, rules, pushConclusion, recommendationParts, setRisk) {
-  const mainTiradsRules = rules.filter((rule) => rule?.group === "tirads-main");
-  const otherRules = rules.filter((rule) => rule?.group !== "tirads-main");
+  const mainRules = rules.filter((rule) => ["tirads-main", "birads-main"].includes(rule?.group));
+  const otherRules = rules.filter((rule) => !["tirads-main", "birads-main"].includes(rule?.group));
 
-  if (mainTiradsRules.length) {
-    const matchedMainRules = mainTiradsRules.filter((rule) => {
-      const hasTirads = rule.tiradsEquals
-        ? context.lesions.some((item) => item.tirads === rule.tiradsEquals)
-        : true;
-      const hasTiradsIn = rule.tiradsIn
-        ? context.lesions.some((item) => rule.tiradsIn.includes(item.tirads))
-        : true;
-      return hasTirads && hasTiradsIn;
-    });
-
-    if (matchedMainRules.length) {
-      const pickScore = (rule) => {
-        if (rule.tiradsEquals != null) return rule.tiradsEquals;
-        if (Array.isArray(rule.tiradsIn) && rule.tiradsIn.length) {
-          return Math.max(...rule.tiradsIn);
-        }
-        return 0;
-      };
-
-      const bestRule = matchedMainRules.sort((a, b) => pickScore(b) - pickScore(a))[0];
-      pushConclusion(bestRule.conclusion);
-      if (bestRule.recommendation) recommendationParts.push(bestRule.recommendation);
-      setRisk(bestRule.riskLevel || "benign");
-    }
-  }
-
-  otherRules.forEach((rule) => {
-    if (!rule) return;
-
+  const matchRule = (rule) => {
     const hasTirads = rule.tiradsEquals ? context.lesions.some((item) => item.tirads === rule.tiradsEquals) : true;
     const hasTiradsIn = rule.tiradsIn ? context.lesions.some((item) => rule.tiradsIn.includes(item.tirads)) : true;
-    const hasVertical = rule.requireVertical ? context.lesions.some((item) => item.orientation.includes("вертикально")) : true;
+    const hasBirads = rule.biradsEquals ? context.lesions.some((item) => item.birads === rule.biradsEquals) : true;
+    const hasBiradsIn = rule.biradsIn ? context.lesions.some((item) => rule.biradsIn.includes(item.birads)) : true;
+    const hasVertical = rule.requireVertical
+      ? context.lesions.some((item) => item.orientation.includes("вертикально"))
+      : true;
     const hasIrregularContours = rule.requireIrregularContours
       ? context.lesions.some((item) => item.contour.includes("неров") || item.contour.includes("нечет"))
       : true;
@@ -756,10 +858,58 @@ function applyNoduleRules(context, rules, pushConclusion, recommendationParts, s
       ? context.lesions.some((item) => item.type.includes("макрокальцинат"))
       : true;
 
-    if (!(hasTirads && hasTiradsIn && hasVertical && hasIrregularContours && hasChaoticFlow && hasCystAvascular && hasMacrocalcinate)) {
-      return;
-    }
+    const orientationOk = !rule.orientationIncludes
+      || context.lesions.some((item) => rule.orientationIncludes.some((token) => item.orientation.includes(token)));
+    const contoursOk = !rule.contoursIncludes
+      || context.lesions.some((item) => rule.contoursIncludes.some((token) => item.contour.includes(token)));
+    const vascularityOk = !rule.vascularityIncludes
+      || context.lesions.some((item) => rule.vascularityIncludes.some((token) => item.vascularity.includes(token)));
+    const tagOk = !rule.tagIncludes
+      || context.lesions.some((item) => rule.tagIncludes.some((token) => item.type.includes(token)));
+    const minBiradsCountOk = rule.minBiradsCount == null
+      || context.lesions.filter((item) => item.birads === rule.biradsEquals).length >= rule.minBiradsCount;
+    const quadrantCountOk = rule.requireQuadrantCount == null || (context.lesionQuadrants?.size || 0) >= rule.requireQuadrantCount;
+    const bothSidesOk = !rule.requireBothSides || (context.lesionSides?.has("left") && context.lesionSides?.has("right"));
 
+    return hasTirads
+      && hasTiradsIn
+      && hasBirads
+      && hasBiradsIn
+      && hasVertical
+      && hasIrregularContours
+      && hasChaoticFlow
+      && hasCystAvascular
+      && hasMacrocalcinate
+      && orientationOk
+      && contoursOk
+      && vascularityOk
+      && tagOk
+      && minBiradsCountOk
+      && quadrantCountOk
+      && bothSidesOk;
+  };
+
+  if (mainRules.length) {
+    const matchedMainRules = mainRules.filter((rule) => rule && matchRule(rule));
+
+    if (matchedMainRules.length) {
+      const pickScore = (rule) => {
+        if (rule.biradsEquals != null) return rule.biradsEquals;
+        if (Array.isArray(rule.biradsIn) && rule.biradsIn.length) return Math.max(...rule.biradsIn);
+        if (rule.tiradsEquals != null) return rule.tiradsEquals;
+        if (Array.isArray(rule.tiradsIn) && rule.tiradsIn.length) return Math.max(...rule.tiradsIn);
+        return 0;
+      };
+
+      const bestRule = matchedMainRules.sort((a, b) => pickScore(b) - pickScore(a))[0];
+      pushConclusion(bestRule.conclusion);
+      if (bestRule.recommendation) recommendationParts.push(bestRule.recommendation);
+      setRisk(bestRule.riskLevel || "benign");
+    }
+  }
+
+  otherRules.forEach((rule) => {
+    if (!rule || !matchRule(rule)) return;
     pushConclusion(rule.conclusion);
     if (rule.recommendation) recommendationParts.push(rule.recommendation);
     setRisk(rule.riskLevel || "benign");
@@ -858,6 +1008,18 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
     })
     .filter(Boolean);
 
+  const reactiveDetails = significantRows
+    .filter(({ fields }) => {
+      const status = normalizeSpaces((fields[rule.statusFieldIndex ?? 4] || "").toLowerCase());
+      return reactiveTokens.some((token) => status.includes(token));
+    })
+    .map(({ group, fields }) => {
+      const amount = normalizeSpaces(fields[rule.amountFieldIndex ?? 0] || "");
+      const status = normalizeSpaces(fields[rule.statusFieldIndex ?? 4] || "");
+      return `${amount} ${group} (${status})`;
+    })
+    .filter(Boolean);
+
   if (hasConglomerate && rule.conglomerateConclusion) {
     pushConclusion(rule.conglomerateConclusion);
   }
@@ -873,6 +1035,12 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
 
   const prefix = rule.pathologicalDetailedPrefix || "Патологически изменённые л/у шеи";
   pushConclusion(`${prefix}: ${details.join("; ")}.`);
+
+  if (reactiveDetails.length) {
+    const reactivePrefix = rule.reactiveAdditionalPrefix || "Также реактивно измененные лимфоузлы";
+    pushConclusion(`${reactivePrefix}: ${reactiveDetails.join("; ")}.`);
+  }
+
   if (rule.pathologicalRecommendation) recommendationParts.push(rule.pathologicalRecommendation);
   setRisk(rule.pathologicalRiskLevel || "high");
 }
@@ -883,14 +1051,61 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
 
     const aiitMatch =
       !rule.requireAiit ||
-      ((rule.aiitStructureIncludes || []).some((token) => context.parenchyma.structure.includes(token)) &&
-        (rule.aiitEchogenicityIncludes || []).some((token) => context.parenchyma.echogenicity.includes(token)));
+      ((rule.aiitStructureIncludes || []).some((token) => (context.parenchyma?.structure || "").includes(token)) &&
+        (rule.aiitEchogenicityIncludes || []).some((token) => (context.parenchyma?.echogenicity || "").includes(token)));
 
     const tiradsMatch = !rule.requireTiradsIn || context.lesions.some((item) => rule.requireTiradsIn.includes(item.tirads));
+    const biradsMatch = !rule.requireBiradsIn || context.lesions.some((item) => rule.requireBiradsIn.includes(item.birads));
     const noPathologicalLymphMatch = !rule.requireNoPathologicalLymph || !context.hasPathologicalLymph;
     const pathologicalLymphMatch = !rule.requirePathologicalLymph || context.hasPathologicalLymph || context.hasPathologicalQuestionLymph;
+    const pathologicalOrQuestionLymphMatch = !rule.requirePathologicalOrQuestionLymph
+      || context.hasPathologicalLymph
+      || context.hasPathologicalQuestionLymph;
+    const reactiveLymphMatch = !rule.requireReactiveLymph || context.allLymphReactive;
+    const noLesionsMatch = !rule.requireNoLesions || !context.hasLesions;
+    const singleLesionMatch = !rule.requireSingleLesion || context.lesions.length === 1;
+    const minLesionsCountMatch = rule.minLesionsCount == null || context.lesions.length >= rule.minLesionsCount;
+    const bothSidesMatch = !rule.requireBothSides || (context.lesionSides?.has("left") && context.lesionSides?.has("right"));
+    const orientationMatch = !rule.requireOrientationIncludes
+      || context.lesions.some((item) => rule.requireOrientationIncludes.some((token) => item.orientation.includes(token)));
+    const echogenicityMatch = !rule.requireEchogenicityIncludes
+      || context.lesions.some((item) => rule.requireEchogenicityIncludes.some((token) => item.echogenicity.includes(token)));
+    const vascularityMatch = !rule.requireVascularityIncludes
+      || context.lesions.some((item) => rule.requireVascularityIncludes.some((token) => item.vascularity.includes(token)));
+    const tagMatch = !rule.requireTagIncludes
+      || context.lesions.some((item) => rule.requireTagIncludes.some((token) => item.type.includes(token)));
+    const morphotypeMatch = !rule.requireMorphotypeIncludes
+      || rule.requireMorphotypeIncludes.some((token) => (context.morphotype || "").includes(token));
+    const ductsExpandedMatch = !rule.requireDuctsExpanded || (context.ducts || "").includes("расширены");
+    const onlyAxillaryLymphMatch = !rule.requireOnlyAxillaryLymph
+      || context.lymphRows.every((row) => row.group.toLowerCase().includes("подмышеч") || (row.fields?.[0] || "").includes("визуально не изменены"));
+    const lymphSideMatch = !rule.requireLymphSides
+      || context.lymphRows.some((row) => rule.requireLymphSides.some((token) => row.group.toLowerCase().includes(token.toLowerCase())));
+    const lymphGroupMatch = !rule.requireLymphGroupIn
+      || context.lymphRows.some((row) => rule.requireLymphGroupIn.some((token) => row.group.toLowerCase().includes(token.toLowerCase())));
 
-    if (!(aiitMatch && tiradsMatch && noPathologicalLymphMatch && pathologicalLymphMatch)) {
+    if (!(
+      aiitMatch
+      && tiradsMatch
+      && biradsMatch
+      && noPathologicalLymphMatch
+      && pathologicalLymphMatch
+      && pathologicalOrQuestionLymphMatch
+      && reactiveLymphMatch
+      && noLesionsMatch
+      && singleLesionMatch
+      && minLesionsCountMatch
+      && bothSidesMatch
+      && orientationMatch
+      && echogenicityMatch
+      && vascularityMatch
+      && tagMatch
+      && morphotypeMatch
+      && ductsExpandedMatch
+      && onlyAxillaryLymphMatch
+      && lymphSideMatch
+      && lymphGroupMatch
+    )) {
       return;
     }
 
@@ -907,11 +1122,18 @@ function buildPatientRecommendation(protocolRules, riskLevel, recommendationPart
   const followUpMonths = followUpMonthsByRisk[riskLevel] || 12;
   const isOncoRisk = riskLevel === "moderate" || riskLevel === "high";
 
+  const hasUrgentRecommendation = recommendationParts.some((value) =>
+    (value || "").toLowerCase().includes("сроч")
+  );
+
   const uniqueParts = recommendationParts
     .filter((value, index, arr) => value && arr.indexOf(value) === index)
     .filter((value) => {
       const normalized = value.toLowerCase();
-      if (isOncoRisk && normalized.includes("консультация онколога")) {
+      if (hasUrgentRecommendation && normalized.includes("консультация онколога") && !normalized.includes("сроч")) {
+        return false;
+      }
+      if (isOncoRisk && normalized.includes("консультация онколога") && !normalized.includes("сроч")) {
         return false;
       }
       if (!isOncoRisk && normalized.includes("консультация эндокринолога")) {
@@ -921,10 +1143,12 @@ function buildPatientRecommendation(protocolRules, riskLevel, recommendationPart
     });
 
   if (riskLevel === "high") {
-    uniqueParts.unshift(
-      templates.highRisk ||
-        "Срочная консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ)."
-    );
+    if (!hasUrgentRecommendation) {
+      uniqueParts.unshift(
+        templates.highRisk ||
+          "Консультация онколога, решение вопроса о проведении тонкоигольной аспирационной биопсии (ТАБ)."
+      );
+    }
   } else if (riskLevel === "moderate") {
     uniqueParts.unshift(
       templates.moderateRisk ||

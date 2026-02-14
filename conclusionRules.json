@@ -230,5 +230,110 @@
         "riskLevel": "high"
       }
     ]
+  },
+  "breast": {
+    "recommendationTemplates": {
+      "benignRisk": "Консультация маммолога. Динамическое наблюдение по клинической необходимости.",
+      "moderateRisk": "Консультация маммолога (онколога-маммолога по показаниям), решение вопроса о дообследовании.",
+      "highRisk": "Консультация онколога-маммолога, решение вопроса о морфологической верификации по показаниям.",
+      "followUpPrefix": "Контрольное УЗИ молочных желез"
+    },
+    "followUpMonthsByRisk": {
+      "benign": 12,
+      "moderate": 6,
+      "high": 3
+    },
+    "fallbackConclusion": "По данным УЗИ молочных желез и регионарных лимфоузлов значимых патологических изменений не выявлено.",
+    "lesionsRule": {
+      "conclusionPrefix": "Очаговые образования молочных желез",
+      "noLesionsConclusion": "Очаговые образования молочных желез не выявлены."
+    },
+    "noduleRules": [
+      {
+        "biradsIn": [
+          1,
+          2
+        ],
+        "conclusion": "Выявлены доброкачественные очаговые изменения (BI-RADS 1-2).",
+        "riskLevel": "benign",
+        "group": "birads-main"
+      },
+      {
+        "biradsEquals": 3,
+        "conclusion": "Выявлены образования вероятно доброкачественного характера (BI-RADS 3).",
+        "riskLevel": "moderate",
+        "group": "birads-main"
+      },
+      {
+        "biradsEquals": 4,
+        "conclusion": "Выявлены подозрительные образования (BI-RADS 4).",
+        "riskLevel": "high",
+        "group": "birads-main"
+      },
+      {
+        "biradsEquals": 5,
+        "conclusion": "Выявлены образования высокой подозрительности на злокачественный процесс (BI-RADS 5).",
+        "riskLevel": "high",
+        "group": "birads-main",
+        "recommendation": "Срочная консультация онколога-маммолога, решение вопроса о морфологической верификации образования."
+      }
+    ],
+    "ductRules": [
+      {
+        "ductsIncludes": [
+          "незначительно расширены"
+        ],
+        "conclusion": "Незначительная дуктэктазия млечных протоков.",
+        "riskLevel": "benign"
+      },
+      {
+        "ductsIncludes": [
+          "локально расширены"
+        ],
+        "conclusion": "Локальная дуктэктазия млечных протоков.",
+        "riskLevel": "benign"
+      },
+      {
+        "ductsIncludes": [
+          "диффузно расширены"
+        ],
+        "conclusion": "Диффузная дуктэктазия млечных протоков.",
+        "riskLevel": "moderate"
+      }
+    ],
+    "morphotypeRules": [],
+    "lymphRule": {
+      "predefinedBlockPattern": "^(Подмышечные|Подключичные|Надключичные)",
+      "additionalBlockTitle": "Дополнительные лимфоузлы",
+      "additionalGroupFieldIndex": 0,
+      "additionalAmountFieldIndex": 1,
+      "additionalSideFieldIndex": 2,
+      "additionalMorphologyFieldIndex": 3,
+      "additionalVascularFieldIndex": 4,
+      "additionalKmdFieldIndex": 5,
+      "additionalStatusFieldIndex": 6,
+      "amountFieldIndex": 0,
+      "statusFieldIndex": 4,
+      "normalAmountToken": "визуально не изменены",
+      "pathologicalToken": "патологический",
+      "reactiveTokens": [
+        "реактив",
+        "гиперплаз"
+      ],
+      "questionMarkToken": "?",
+      "reactiveConclusion": "Реактивные изменения регионарных лимфоузлов.",
+      "reactiveRecommendation": "Консультация маммолога, наблюдение по клинической необходимости.",
+      "reactiveRiskLevel": "benign",
+      "reactiveProbableConclusion": "Вероятно реактивные изменения регионарных лимфоузлов.",
+      "reactiveProbableRecommendation": "Консультация маммолога, контроль в динамике.",
+      "reactiveProbableRiskLevel": "benign",
+      "conglomerateConclusion": "Выявлен конгломерат регионарных лимфоузлов.",
+      "pathologicalFallbackConclusion": "Выявлены патологически измененные регионарные лимфоузлы.",
+      "pathologicalDetailedPrefix": "Патологически измененные регионарные лимфоузлы",
+      "pathologicalRecommendation": "Консультация онколога-маммолога, решение вопроса о дообследовании.",
+      "pathologicalRiskLevel": "high",
+      "reactiveAdditionalPrefix": "Также реактивные изменения регионарных лимфоузлов"
+    },
+    "combinedRules": []
   }
 }
