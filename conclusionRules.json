@@ -350,7 +350,7 @@
     },
     "fallbackConclusion": "По данным УЗИ лимфатических узлов значимых патологических изменений не выявлено.",
     "lesionsRule": {
-      "noLesionsConclusion": "Патологических изменений лимфатических узлов не выявлено."
+      "enabled": false
     },
     "lymphRule": {
       "predefinedBlockPattern": "^(Поднижнечелюстные|Яремные|Надключичные|Подключичные|Подмышечные|Паховые)",
@@ -387,7 +387,7 @@
         "лимфопролифератив"
       ],
       "lymphoproliferativeConclusion": "УЗ-признаки, подозрительные на лимфопролиферативное заболевание.",
-      "lymphoproliferativeRecommendation": "Консультация гематолога и морфологическая верификация наиболее измененного лимфоузла.",
+      "lymphoproliferativeRecommendation": "Консультация онколога/гематолога, решение вопроса о морфологической верификации.",
       "lymphoproliferativeRiskLevel": "high"
     },
     "combinedRules": [

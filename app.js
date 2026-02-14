@@ -565,7 +565,10 @@ function collectThyroidContext(blocks, protocolRules) {
     return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
   });
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
-  context.hasPathologicalLymph = statuses.some((status) => status.includes("патологический") && !status.includes("?"));
+  context.hasPathologicalLymph = statuses.some((status) =>
+    (status.includes("патологический") || lymphoproliferativeTokens.some((token) => token && status.includes(token)))
+    && !status.includes("?")
+  );
   context.hasPathologicalQuestionLymph = statuses.some((status) => status.includes("патологический?"));
   context.hasReactiveQuestionLymph = statuses.some((status) =>
     (status.includes("реактив") || status.includes("гиперплаз")) && status.includes("?")
@@ -608,7 +611,10 @@ function collectLymphContext(blocks, protocolRules) {
   const lymphoproliferativeTokens = (protocolRules.lymphRule?.lymphoproliferativeTokens || ["лимфопролифератив"])
     .map((value) => (value || "").toLowerCase());
 
-  context.hasPathologicalLymph = statuses.some((status) => status.includes("патологический") && !status.includes("?"));
+  context.hasPathologicalLymph = statuses.some((status) =>
+    (status.includes("патологический") || lymphoproliferativeTokens.some((token) => token && status.includes(token)))
+    && !status.includes("?")
+  );
   context.hasPathologicalQuestionLymph = statuses.some((status) => status.includes("патологический?"));
   context.hasReactiveQuestionLymph = statuses.some((status) =>
     (status.includes("реактив") || status.includes("гиперплаз")) && status.includes("?")
@@ -864,7 +870,7 @@ function applyMorphotypeRules(context, rules, pushConclusion, recommendationPart
 }
 
 function applyLesionsRule(context, rule, pushConclusion) {
-  if (!rule) return;
+  if (!rule || rule.enabled === false) return;
   if (!context.hasLesions) {
     if (rule.noLesionsConclusion) {
       pushConclusion(rule.noLesionsConclusion);
@@ -1024,7 +1030,10 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
   const lymphoproliferativeTokens = (rule.lymphoproliferativeTokens || ["лимфопролифератив"])
     .map((token) => (token || "").toLowerCase());
 
-  const hasPathological = statuses.some((status) => status.includes(pathologicalToken));
+  const hasPathological = statuses.some((status) =>
+    status.includes(pathologicalToken)
+    || lymphoproliferativeTokens.some((token) => token && status.includes(token))
+  );
   const allReactive = statuses.every((status) =>
     reactiveTokens.some((token) => status.includes(token))
   );
@@ -1057,9 +1066,11 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
   }
 
   const details = significantRows
-    .filter(({ fields }) =>
-      normalizeSpaces((fields[rule.statusFieldIndex ?? 4] || "").toLowerCase()).includes(pathologicalToken)
-    )
+    .filter(({ fields }) => {
+      const status = normalizeSpaces((fields[rule.statusFieldIndex ?? 4] || "").toLowerCase());
+      return status.includes(pathologicalToken)
+        || lymphoproliferativeTokens.some((token) => token && status.includes(token));
+    })
     .map(({ group, fields }) => {
       const amount = normalizeSpaces(fields[rule.amountFieldIndex ?? 0] || "");
       const status = normalizeSpaces(fields[rule.statusFieldIndex ?? 4] || "");
@@ -1088,6 +1099,10 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
       pushConclusion(rule.pathologicalFallbackConclusion);
       if (rule.pathologicalRecommendation) recommendationParts.push(rule.pathologicalRecommendation);
       setRisk(rule.pathologicalRiskLevel || "high");
+    }
+    if (reactiveDetails.length) {
+      const reactivePrefix = rule.reactiveAdditionalPrefix || "Также реактивно измененные лимфоузлы";
+      pushConclusion(`${reactivePrefix}: ${reactiveDetails.join("; ")}.`);
     }
     return;
   }
