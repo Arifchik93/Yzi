@@ -38,7 +38,6 @@ let currentBlocks = [];
 const textMeasureCanvas = document.createElement("canvas");
 let editorTemplateLabel = "";
 const localTemplatePrefix = "local-template-";
-let lastCalcContext = {};
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -87,22 +86,9 @@ function parseSegments(text) {
   let lastIndex = 0;
   let match;
 
-  const detectCalcToken = (innerExpression, contextText = "") => {
+  const detectCalcToken = (innerExpression) => {
     const normalized = innerExpression.toLowerCase().replace(/\s+/g, " ");
     const normalizedNumeric = normalized.replace(",", ".");
-    const contextNormalized = contextText.toLowerCase();
-
-    const isVolumeSum =
-      normalized.includes("vпр") &&
-      normalized.includes("vлев") &&
-      normalized.includes("+");
-
-    if (isVolumeSum) {
-      return {
-        type: "calc",
-        formula: "sumVolumes",
-      };
-    }
 
     const has047 =
       normalizedNumeric.includes("0.47") || normalized.includes("0,47");
@@ -114,16 +100,9 @@ function parseSegments(text) {
       normalized.includes("эллип");
 
     if (has047 || has052) {
-      const storeKey = contextNormalized.includes("vпр")
-        ? "Vпр"
-        : contextNormalized.includes("vлев")
-        ? "Vлев"
-        : null;
-
       return {
         type: "calc",
         formula: has047 ? "ellipse47" : "ellipse52",
-        storeKey,
       };
     }
 
@@ -166,7 +145,7 @@ function parseSegments(text) {
         });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();
-        const calcToken = detectCalcToken(inner, rawOption.slice(0, tokenStart));
+        const calcToken = detectCalcToken(inner);
 
         if (calcToken) {
           tokens.push(calcToken);
@@ -239,7 +218,7 @@ function parseSegments(text) {
         });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();
-        const calcToken = detectCalcToken(inner, rawText.slice(0, tokenStart));
+        const calcToken = detectCalcToken(inner);
 
         if (calcToken) {
           tokens.push(calcToken);
@@ -301,7 +280,7 @@ function parseSegments(text) {
       type: "field",
       options: parsedOptions,
       selectedOptionIndex: 0,
-      value: parsedOptions[0] ? assembleOption(parsedOptions[0], {}) : "",
+      value: parsedOptions[0] ? assembleOption(parsedOptions[0]) : "",
     });
     lastIndex = match.index + match[0].length;
   }
@@ -319,14 +298,14 @@ function createRow(content) {
   };
 }
 
-function assembleRow(row, calcContext = {}) {
+function assembleRow(row) {
   return row.segments
     .map((segment) => {
       if (segment.type === "text") {
         return segment.value;
       }
       if (segment.type === "inline") {
-        return assembleInlineSegment(segment, calcContext);
+        return assembleInlineSegment(segment);
       }
       return segment.value ?? "";
     })
@@ -348,22 +327,16 @@ function computeEllipseVolume(values, coefficient = 0.52) {
   return volume.toFixed(2);
 }
 
-function computeCalcValue(token, inputValues, calcContext = {}) {
+function computeCalcValue(token, inputValues) {
   if (token.formula === "ellipse47") {
     return computeEllipseVolume(inputValues, 0.47);
   }
 
-  if (token.formula === "sumVolumes") {
-    const right = Number.parseFloat(calcContext.Vпр);
-    const left = Number.parseFloat(calcContext.Vлев);
-    if (Number.isNaN(right) || Number.isNaN(left)) return "";
-    return (right + left).toFixed(2);
-  }
 
   return computeEllipseVolume(inputValues, 0.52);
 }
 
-function assembleOption(option, calcContext = {}) {
+function assembleOption(option) {
   return option.tokens
     .map((token) => {
       if (token.type === "text") {
@@ -374,18 +347,14 @@ function assembleOption(option, calcContext = {}) {
         return token.inputType === "date" ? formatDate(value) : value;
       }
       if (token.type === "calc") {
-        const calcValue = computeCalcValue(token, option.inputValues, calcContext);
-        if (token.storeKey && calcValue) {
-          calcContext[token.storeKey] = calcValue;
-        }
-        return calcValue;
+        return computeCalcValue(token, option.inputValues);
       }
       return "";
     })
     .join("");
 }
 
-function assembleInlineSegment(segment, calcContext = {}) {
+function assembleInlineSegment(segment) {
   return segment.tokens
     .map((token) => {
       if (token.type === "text") {
@@ -396,11 +365,7 @@ function assembleInlineSegment(segment, calcContext = {}) {
         return token.inputType === "date" ? formatDate(value) : value;
       }
       if (token.type === "calc") {
-        const calcValue = computeCalcValue(token, segment.inputValues, calcContext);
-        if (token.storeKey && calcValue) {
-          calcContext[token.storeKey] = calcValue;
-        }
-        return calcValue;
+        return computeCalcValue(token, segment.inputValues);
       }
       return "";
     })
@@ -408,20 +373,18 @@ function assembleInlineSegment(segment, calcContext = {}) {
 }
 
 function updateOutput() {
-  const calcContext = {};
   const text = currentBlocks
     .map((block) => {
       if (block.type === "text") {
-        return assembleRow(block.rows[0], calcContext);
+        return assembleRow(block.rows[0]);
       }
       const rowsText = block.rows
-        .map((row) => assembleRow(row, calcContext).trim())
+        .map((row) => assembleRow(row).trim())
         .filter(Boolean);
       return rowsText.join("\n");
     })
     .join("");
 
-  lastCalcContext = { ...calcContext };
   protocolOutput.value = text.trim();
   resizeTextarea(protocolOutput);
 }
@@ -459,7 +422,7 @@ function renderField(segment, onChange) {
     if (!option) return;
 
     const updateSegmentValue = () => {
-      segment.value = assembleOption(option, {});
+      segment.value = assembleOption(option);
       onChange();
     };
 
@@ -494,7 +457,7 @@ function renderField(segment, onChange) {
       if (token.type === "calc") {
         const output = document.createElement("span");
         output.className = "calc-output";
-        output.textContent = computeCalcValue(token, option.inputValues, { ...lastCalcContext });
+        output.textContent = computeCalcValue(token, option.inputValues);
         extras.appendChild(output);
       }
     });
@@ -509,13 +472,9 @@ function renderField(segment, onChange) {
 
     const calcTokens = option.tokens.filter((token) => token.type === "calc");
     const outputs = extras.querySelectorAll(".calc-output");
-    const calcContext = { ...lastCalcContext };
 
     calcTokens.forEach((token, index) => {
-      const calcValue = computeCalcValue(token, option.inputValues, calcContext);
-      if (token.storeKey && calcValue) {
-        calcContext[token.storeKey] = calcValue;
-      }
+      const calcValue = computeCalcValue(token, option.inputValues);
       if (outputs[index]) {
         outputs[index].textContent = calcValue;
       }
@@ -586,13 +545,9 @@ function renderInlineSegment(segment, onChange) {
   const updateCalcOutputs = () => {
     const calcTokens = segment.tokens.filter((token) => token.type === "calc");
     const outputs = wrapper.querySelectorAll(".calc-output");
-    const calcContext = { ...lastCalcContext };
 
     calcTokens.forEach((token, index) => {
-      const calcValue = computeCalcValue(token, segment.inputValues, calcContext);
-      if (token.storeKey && calcValue) {
-        calcContext[token.storeKey] = calcValue;
-      }
+      const calcValue = computeCalcValue(token, segment.inputValues);
       if (outputs[index]) {
         outputs[index].textContent = calcValue;
       }
@@ -639,7 +594,7 @@ function renderInlineSegment(segment, onChange) {
     if (token.type === "calc") {
       const output = document.createElement("span");
       output.className = "calc-output";
-      output.textContent = computeCalcValue(token, segment.inputValues, { ...lastCalcContext });
+      output.textContent = computeCalcValue(token, segment.inputValues);
       wrapper.appendChild(output);
     }
   });
