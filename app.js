@@ -707,7 +707,37 @@ function applyLesionsRule(context, rule, pushConclusion) {
 }
 
 function applyNoduleRules(context, rules, pushConclusion, recommendationParts, setRisk) {
-  rules.forEach((rule) => {
+  const mainTiradsRules = rules.filter((rule) => rule?.group === "tirads-main");
+  const otherRules = rules.filter((rule) => rule?.group !== "tirads-main");
+
+  if (mainTiradsRules.length) {
+    const matchedMainRules = mainTiradsRules.filter((rule) => {
+      const hasTirads = rule.tiradsEquals
+        ? context.lesions.some((item) => item.tirads === rule.tiradsEquals)
+        : true;
+      const hasTiradsIn = rule.tiradsIn
+        ? context.lesions.some((item) => rule.tiradsIn.includes(item.tirads))
+        : true;
+      return hasTirads && hasTiradsIn;
+    });
+
+    if (matchedMainRules.length) {
+      const pickScore = (rule) => {
+        if (rule.tiradsEquals != null) return rule.tiradsEquals;
+        if (Array.isArray(rule.tiradsIn) && rule.tiradsIn.length) {
+          return Math.max(...rule.tiradsIn);
+        }
+        return 0;
+      };
+
+      const bestRule = matchedMainRules.sort((a, b) => pickScore(b) - pickScore(a))[0];
+      pushConclusion(bestRule.conclusion);
+      if (bestRule.recommendation) recommendationParts.push(bestRule.recommendation);
+      setRisk(bestRule.riskLevel || "benign");
+    }
+  }
+
+  otherRules.forEach((rule) => {
     if (!rule) return;
 
     const hasTirads = rule.tiradsEquals ? context.lesions.some((item) => item.tirads === rule.tiradsEquals) : true;
