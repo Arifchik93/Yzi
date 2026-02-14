@@ -14,6 +14,11 @@ const protocols = [
     name: "УЗИ мочевого пузыря и предстательной железы",
     file: "bladderprostate.txt",
   },
+  {
+    id: "thyroidnecklymph",
+    name: "УЗИ щитовидной железы и лимфоузлов шеи",
+    file: "ThyroidNeckLymphNodes.txt",
+  },
 ];
 
 const protocolSelect = document.getElementById("protocolSelect");
