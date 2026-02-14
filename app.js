@@ -14,6 +14,11 @@ const protocols = [
     name: "УЗИ мочевого пузыря и предстательной железы",
     file: "bladderprostate.txt",
   },
+  {
+    id: "thyroidnecklymph",
+    name: "УЗИ щитовидной железы и лимфоузлов шеи",
+    file: "ThyroidNeckLymphNodes.txt",
+  },
 ];
 
 const protocolSelect = document.getElementById("protocolSelect");
@@ -81,6 +86,29 @@ function parseSegments(text) {
   let lastIndex = 0;
   let match;
 
+  const detectCalcToken = (innerExpression) => {
+    const normalized = innerExpression.toLowerCase().replace(/\s+/g, " ");
+    const normalizedNumeric = normalized.replace(",", ".");
+
+    const has047 =
+      normalizedNumeric.includes("0.47") || normalized.includes("0,47");
+    const has052 =
+      normalizedNumeric.includes("0.52") ||
+      normalized.includes("0,52") ||
+      normalized.includes("объем") ||
+      normalized.includes("объём") ||
+      normalized.includes("эллип");
+
+    if (has047 || has052) {
+      return {
+        type: "calc",
+        formula: has047 ? "ellipse47" : "ellipse52",
+      };
+    }
+
+    return null;
+  };
+
   const parseOptionTokens = (rawOption) => {
     const tokens = [];
     const placeholderRegex = /__|_ _|<[^>]+>/g;
@@ -117,28 +145,18 @@ function parseSegments(text) {
         });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();
-        const normalized = inner.toLowerCase().replace(/\s+/g, " ");
-        const normalizedNumeric = normalized.replace(",", ".");
+        const calcToken = detectCalcToken(inner);
 
-        if (
-          normalizedNumeric.includes("0.52") ||
-          normalized.includes("0,52") ||
-          normalized.includes("объем") ||
-          normalized.includes("объём") ||
-          normalized.includes("эллип")
-        ) {
-          tokens.push({
-            type: "calc",
-            formula: "ellipse",
-          });
-        } else if (normalized.includes("дд.мм.гггг")) {
+        if (calcToken) {
+          tokens.push(calcToken);
+        } else if (inner.toLowerCase().includes("дд.мм.гггг")) {
           tokens.push({
             type: "input",
             inputType: "date",
             inputIndex: inputIndex++,
             placeholder: "дд.мм.гггг",
           });
-        } else if (normalized.includes("число")) {
+        } else if (inner.toLowerCase().includes("число")) {
           tokens.push({
             type: "input",
             inputType: "number",
@@ -200,28 +218,18 @@ function parseSegments(text) {
         });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();
-        const normalized = inner.toLowerCase().replace(/\s+/g, " ");
-        const normalizedNumeric = normalized.replace(",", ".");
+        const calcToken = detectCalcToken(inner);
 
-        if (
-          normalizedNumeric.includes("0.52") ||
-          normalized.includes("0,52") ||
-          normalized.includes("объем") ||
-          normalized.includes("объём") ||
-          normalized.includes("эллип")
-        ) {
-          tokens.push({
-            type: "calc",
-            formula: "ellipse",
-          });
-        } else if (normalized.includes("дд.мм.гггг")) {
+        if (calcToken) {
+          tokens.push(calcToken);
+        } else if (inner.toLowerCase().includes("дд.мм.гггг")) {
           tokens.push({
             type: "input",
             inputType: "date",
             inputIndex: inputIndex++,
             placeholder: "дд.мм.гггг",
           });
-        } else if (normalized.includes("число")) {
+        } else if (inner.toLowerCase().includes("число")) {
           tokens.push({
             type: "input",
             inputType: "number",
@@ -311,12 +319,21 @@ function formatDate(value) {
   return `${day}.${month}.${year}`;
 }
 
-function computeEllipseVolume(values) {
+function computeEllipseVolume(values, coefficient = 0.52) {
   if (values.length < 3) return "";
   const [a, b, c] = values.map((item) => Number.parseFloat(item));
   if ([a, b, c].some((item) => Number.isNaN(item))) return "";
-  const volume = (a * b * c * 0.52) / 1000;
+  const volume = (a * b * c * coefficient) / 1000;
   return volume.toFixed(2);
+}
+
+function computeCalcValue(token, inputValues) {
+  if (token.formula === "ellipse47") {
+    return computeEllipseVolume(inputValues, 0.47);
+  }
+
+
+  return computeEllipseVolume(inputValues, 0.52);
 }
 
 function assembleOption(option) {
@@ -330,7 +347,7 @@ function assembleOption(option) {
         return token.inputType === "date" ? formatDate(value) : value;
       }
       if (token.type === "calc") {
-        return computeEllipseVolume(option.inputValues);
+        return computeCalcValue(token, option.inputValues);
       }
       return "";
     })
@@ -348,7 +365,7 @@ function assembleInlineSegment(segment) {
         return token.inputType === "date" ? formatDate(value) : value;
       }
       if (token.type === "calc") {
-        return computeEllipseVolume(segment.inputValues);
+        return computeCalcValue(token, segment.inputValues);
       }
       return "";
     })
@@ -440,19 +457,27 @@ function renderField(segment, onChange) {
       if (token.type === "calc") {
         const output = document.createElement("span");
         output.className = "calc-output";
-        output.textContent = computeEllipseVolume(option.inputValues);
+        output.textContent = computeCalcValue(token, option.inputValues);
         extras.appendChild(output);
       }
     });
 
     updateSegmentValue();
+    updateCalcOutputs();
   };
 
   const updateCalcOutputs = () => {
     const option = segment.options[segment.selectedOptionIndex];
     if (!option) return;
-    extras.querySelectorAll(".calc-output").forEach((el) => {
-      el.textContent = computeEllipseVolume(option.inputValues);
+
+    const calcTokens = option.tokens.filter((token) => token.type === "calc");
+    const outputs = extras.querySelectorAll(".calc-output");
+
+    calcTokens.forEach((token, index) => {
+      const calcValue = computeCalcValue(token, option.inputValues);
+      if (outputs[index]) {
+        outputs[index].textContent = calcValue;
+      }
     });
   };
 
@@ -518,8 +543,14 @@ function renderInlineSegment(segment, onChange) {
   };
 
   const updateCalcOutputs = () => {
-    wrapper.querySelectorAll(".calc-output").forEach((el) => {
-      el.textContent = computeEllipseVolume(segment.inputValues);
+    const calcTokens = segment.tokens.filter((token) => token.type === "calc");
+    const outputs = wrapper.querySelectorAll(".calc-output");
+
+    calcTokens.forEach((token, index) => {
+      const calcValue = computeCalcValue(token, segment.inputValues);
+      if (outputs[index]) {
+        outputs[index].textContent = calcValue;
+      }
     });
   };
 
@@ -563,11 +594,12 @@ function renderInlineSegment(segment, onChange) {
     if (token.type === "calc") {
       const output = document.createElement("span");
       output.className = "calc-output";
-      output.textContent = computeEllipseVolume(segment.inputValues);
+      output.textContent = computeCalcValue(token, segment.inputValues);
       wrapper.appendChild(output);
     }
   });
 
+  updateCalcOutputs();
   return wrapper;
 }
 
