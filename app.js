@@ -86,6 +86,49 @@ function parseSegments(text) {
   let lastIndex = 0;
   let match;
 
+  const detectCalcToken = (innerExpression, contextText = "") => {
+    const normalized = innerExpression.toLowerCase().replace(/\s+/g, " ");
+    const normalizedNumeric = normalized.replace(",", ".");
+    const contextNormalized = contextText.toLowerCase();
+
+    const isVolumeSum =
+      normalized.includes("vпр") &&
+      normalized.includes("vлев") &&
+      normalized.includes("+");
+
+    if (isVolumeSum) {
+      return {
+        type: "calc",
+        formula: "sumVolumes",
+      };
+    }
+
+    const has047 =
+      normalizedNumeric.includes("0.47") || normalized.includes("0,47");
+    const has052 =
+      normalizedNumeric.includes("0.52") ||
+      normalized.includes("0,52") ||
+      normalized.includes("объем") ||
+      normalized.includes("объём") ||
+      normalized.includes("эллип");
+
+    if (has047 || has052) {
+      const storeKey = contextNormalized.includes("vпр")
+        ? "Vпр"
+        : contextNormalized.includes("vлев")
+        ? "Vлев"
+        : null;
+
+      return {
+        type: "calc",
+        formula: has047 ? "ellipse47" : "ellipse52",
+        storeKey,
+      };
+    }
+
+    return null;
+  };
+
   const parseOptionTokens = (rawOption) => {
     const tokens = [];
     const placeholderRegex = /__|_ _|<[^>]+>/g;
@@ -122,28 +165,18 @@ function parseSegments(text) {
         });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();
-        const normalized = inner.toLowerCase().replace(/\s+/g, " ");
-        const normalizedNumeric = normalized.replace(",", ".");
+        const calcToken = detectCalcToken(inner, rawOption.slice(0, tokenStart));
 
-        if (
-          normalizedNumeric.includes("0.52") ||
-          normalized.includes("0,52") ||
-          normalized.includes("объем") ||
-          normalized.includes("объём") ||
-          normalized.includes("эллип")
-        ) {
-          tokens.push({
-            type: "calc",
-            formula: "ellipse",
-          });
-        } else if (normalized.includes("дд.мм.гггг")) {
+        if (calcToken) {
+          tokens.push(calcToken);
+        } else if (inner.toLowerCase().includes("дд.мм.гггг")) {
           tokens.push({
             type: "input",
             inputType: "date",
             inputIndex: inputIndex++,
             placeholder: "дд.мм.гггг",
           });
-        } else if (normalized.includes("число")) {
+        } else if (inner.toLowerCase().includes("число")) {
           tokens.push({
             type: "input",
             inputType: "number",
@@ -205,28 +238,18 @@ function parseSegments(text) {
         });
       } else if (tokenValue.startsWith("<")) {
         const inner = tokenValue.slice(1, -1).trim();
-        const normalized = inner.toLowerCase().replace(/\s+/g, " ");
-        const normalizedNumeric = normalized.replace(",", ".");
+        const calcToken = detectCalcToken(inner, rawText.slice(0, tokenStart));
 
-        if (
-          normalizedNumeric.includes("0.52") ||
-          normalized.includes("0,52") ||
-          normalized.includes("объем") ||
-          normalized.includes("объём") ||
-          normalized.includes("эллип")
-        ) {
-          tokens.push({
-            type: "calc",
-            formula: "ellipse",
-          });
-        } else if (normalized.includes("дд.мм.гггг")) {
+        if (calcToken) {
+          tokens.push(calcToken);
+        } else if (inner.toLowerCase().includes("дд.мм.гггг")) {
           tokens.push({
             type: "input",
             inputType: "date",
             inputIndex: inputIndex++,
             placeholder: "дд.мм.гггг",
           });
-        } else if (normalized.includes("число")) {
+        } else if (inner.toLowerCase().includes("число")) {
           tokens.push({
             type: "input",
             inputType: "number",
@@ -277,7 +300,7 @@ function parseSegments(text) {
       type: "field",
       options: parsedOptions,
       selectedOptionIndex: 0,
-      value: parsedOptions[0] ? assembleOption(parsedOptions[0]) : "",
+      value: parsedOptions[0] ? assembleOption(parsedOptions[0], {}) : "",
     });
     lastIndex = match.index + match[0].length;
   }
@@ -295,14 +318,14 @@ function createRow(content) {
   };
 }
 
-function assembleRow(row) {
+function assembleRow(row, calcContext = {}) {
   return row.segments
     .map((segment) => {
       if (segment.type === "text") {
         return segment.value;
       }
       if (segment.type === "inline") {
-        return assembleInlineSegment(segment);
+        return assembleInlineSegment(segment, calcContext);
       }
       return segment.value ?? "";
     })
@@ -316,15 +339,30 @@ function formatDate(value) {
   return `${day}.${month}.${year}`;
 }
 
-function computeEllipseVolume(values) {
+function computeEllipseVolume(values, coefficient = 0.52) {
   if (values.length < 3) return "";
   const [a, b, c] = values.map((item) => Number.parseFloat(item));
   if ([a, b, c].some((item) => Number.isNaN(item))) return "";
-  const volume = (a * b * c * 0.52) / 1000;
+  const volume = (a * b * c * coefficient) / 1000;
   return volume.toFixed(2);
 }
 
-function assembleOption(option) {
+function computeCalcValue(token, inputValues, calcContext = {}) {
+  if (token.formula === "ellipse47") {
+    return computeEllipseVolume(inputValues, 0.47);
+  }
+
+  if (token.formula === "sumVolumes") {
+    const right = Number.parseFloat(calcContext.Vпр);
+    const left = Number.parseFloat(calcContext.Vлев);
+    if (Number.isNaN(right) || Number.isNaN(left)) return "";
+    return (right + left).toFixed(2);
+  }
+
+  return computeEllipseVolume(inputValues, 0.52);
+}
+
+function assembleOption(option, calcContext = {}) {
   return option.tokens
     .map((token) => {
       if (token.type === "text") {
@@ -335,14 +373,18 @@ function assembleOption(option) {
         return token.inputType === "date" ? formatDate(value) : value;
       }
       if (token.type === "calc") {
-        return computeEllipseVolume(option.inputValues);
+        const calcValue = computeCalcValue(token, option.inputValues, calcContext);
+        if (token.storeKey && calcValue) {
+          calcContext[token.storeKey] = calcValue;
+        }
+        return calcValue;
       }
       return "";
     })
     .join("");
 }
 
-function assembleInlineSegment(segment) {
+function assembleInlineSegment(segment, calcContext = {}) {
   return segment.tokens
     .map((token) => {
       if (token.type === "text") {
@@ -353,7 +395,11 @@ function assembleInlineSegment(segment) {
         return token.inputType === "date" ? formatDate(value) : value;
       }
       if (token.type === "calc") {
-        return computeEllipseVolume(segment.inputValues);
+        const calcValue = computeCalcValue(token, segment.inputValues, calcContext);
+        if (token.storeKey && calcValue) {
+          calcContext[token.storeKey] = calcValue;
+        }
+        return calcValue;
       }
       return "";
     })
@@ -361,13 +407,14 @@ function assembleInlineSegment(segment) {
 }
 
 function updateOutput() {
+  const calcContext = {};
   const text = currentBlocks
     .map((block) => {
       if (block.type === "text") {
-        return assembleRow(block.rows[0]);
+        return assembleRow(block.rows[0], calcContext);
       }
       const rowsText = block.rows
-        .map((row) => assembleRow(row).trim())
+        .map((row) => assembleRow(row, calcContext).trim())
         .filter(Boolean);
       return rowsText.join("\n");
     })
@@ -410,7 +457,7 @@ function renderField(segment, onChange) {
     if (!option) return;
 
     const updateSegmentValue = () => {
-      segment.value = assembleOption(option);
+      segment.value = assembleOption(option, {});
       onChange();
     };
 
