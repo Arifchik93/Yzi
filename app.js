@@ -38,6 +38,7 @@ let currentBlocks = [];
 const textMeasureCanvas = document.createElement("canvas");
 let editorTemplateLabel = "";
 const localTemplatePrefix = "local-template-";
+let lastCalcContext = {};
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -420,6 +421,7 @@ function updateOutput() {
     })
     .join("");
 
+  lastCalcContext = { ...calcContext };
   protocolOutput.value = text.trim();
   resizeTextarea(protocolOutput);
 }
@@ -492,19 +494,31 @@ function renderField(segment, onChange) {
       if (token.type === "calc") {
         const output = document.createElement("span");
         output.className = "calc-output";
-        output.textContent = computeEllipseVolume(option.inputValues);
+        output.textContent = computeCalcValue(token, option.inputValues, { ...lastCalcContext });
         extras.appendChild(output);
       }
     });
 
     updateSegmentValue();
+    updateCalcOutputs();
   };
 
   const updateCalcOutputs = () => {
     const option = segment.options[segment.selectedOptionIndex];
     if (!option) return;
-    extras.querySelectorAll(".calc-output").forEach((el) => {
-      el.textContent = computeEllipseVolume(option.inputValues);
+
+    const calcTokens = option.tokens.filter((token) => token.type === "calc");
+    const outputs = extras.querySelectorAll(".calc-output");
+    const calcContext = { ...lastCalcContext };
+
+    calcTokens.forEach((token, index) => {
+      const calcValue = computeCalcValue(token, option.inputValues, calcContext);
+      if (token.storeKey && calcValue) {
+        calcContext[token.storeKey] = calcValue;
+      }
+      if (outputs[index]) {
+        outputs[index].textContent = calcValue;
+      }
     });
   };
 
@@ -570,8 +584,18 @@ function renderInlineSegment(segment, onChange) {
   };
 
   const updateCalcOutputs = () => {
-    wrapper.querySelectorAll(".calc-output").forEach((el) => {
-      el.textContent = computeEllipseVolume(segment.inputValues);
+    const calcTokens = segment.tokens.filter((token) => token.type === "calc");
+    const outputs = wrapper.querySelectorAll(".calc-output");
+    const calcContext = { ...lastCalcContext };
+
+    calcTokens.forEach((token, index) => {
+      const calcValue = computeCalcValue(token, segment.inputValues, calcContext);
+      if (token.storeKey && calcValue) {
+        calcContext[token.storeKey] = calcValue;
+      }
+      if (outputs[index]) {
+        outputs[index].textContent = calcValue;
+      }
     });
   };
 
@@ -615,11 +639,12 @@ function renderInlineSegment(segment, onChange) {
     if (token.type === "calc") {
       const output = document.createElement("span");
       output.className = "calc-output";
-      output.textContent = computeEllipseVolume(segment.inputValues);
+      output.textContent = computeCalcValue(token, segment.inputValues, { ...lastCalcContext });
       wrapper.appendChild(output);
     }
   });
 
+  updateCalcOutputs();
   return wrapper;
 }
 
