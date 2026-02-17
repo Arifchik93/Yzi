@@ -335,5 +335,151 @@
       "reactiveAdditionalPrefix": "Также реактивные изменения регионарных лимфоузлов"
     },
     "combinedRules": []
+  },
+  "lymph": {
+    "recommendationTemplates": {
+      "benignRisk": "Консультация профильного специалиста по клинике. Динамическое наблюдение.",
+      "moderateRisk": "Консультация онколога (гематолога по показаниям), решение вопроса о дообследовании.",
+      "highRisk": "Срочная консультация онколога/гематолога, решение вопроса о морфологической верификации.",
+      "followUpPrefix": "Контрольное УЗИ лимфатических узлов"
+    },
+    "followUpMonthsByRisk": {
+      "benign": 12,
+      "moderate": 6,
+      "high": 3
+    },
+    "fallbackConclusion": "По данным УЗИ лимфатических узлов значимых патологических изменений не выявлено.",
+    "lesionsRule": {
+      "enabled": false
+    },
+    "lymphRule": {
+      "predefinedBlockPattern": "^(Поднижнечелюстные|Яремные|Надключичные|Подключичные|Подмышечные|Паховые)",
+      "additionalBlockTitle": "Дополнительные лимфоузлы",
+      "additionalGroupFieldIndex": 0,
+      "additionalAmountFieldIndex": 1,
+      "additionalSideFieldIndex": 2,
+      "additionalMorphologyFieldIndex": 3,
+      "additionalVascularFieldIndex": 4,
+      "additionalKmdFieldIndex": 5,
+      "additionalStatusFieldIndex": 6,
+      "amountFieldIndex": 0,
+      "statusFieldIndex": 4,
+      "normalAmountToken": "визуально не изменены",
+      "pathologicalToken": "патологический",
+      "reactiveTokens": [
+        "реактив",
+        "гиперплаз"
+      ],
+      "questionMarkToken": "?",
+      "reactiveConclusion": "Реактивные изменения лимфатических узлов.",
+      "reactiveRecommendation": "Наблюдение в динамике и клинико-лабораторная корреляция.",
+      "reactiveRiskLevel": "benign",
+      "reactiveProbableConclusion": "Вероятно реактивные изменения лимфатических узлов.",
+      "reactiveProbableRecommendation": "Консультация профильного специалиста, контроль в динамике.",
+      "reactiveProbableRiskLevel": "moderate",
+      "conglomerateConclusion": "Выявлен конгломерат лимфатических узлов.",
+      "pathologicalFallbackConclusion": "Выявлены патологически измененные лимфатические узлы.",
+      "pathologicalDetailedPrefix": "Патологически измененные лимфатические узлы",
+      "pathologicalRecommendation": "Консультация онколога/гематолога, решение вопроса о морфологической верификации.",
+      "pathologicalRiskLevel": "high",
+      "reactiveAdditionalPrefix": "Также реактивно измененные лимфоузлы",
+      "lymphoproliferativeTokens": [
+        "лимфопролифератив"
+      ],
+      "lymphoproliferativeConclusion": "УЗ-признаки, подозрительные на лимфопролиферативное заболевание.",
+      "lymphoproliferativeRecommendation": "Консультация онколога/гематолога, решение вопроса о морфологической верификации.",
+      "lymphoproliferativeRiskLevel": "high"
+    },
+    "combinedRules": [
+      {
+        "requireLymphoproliferative": true,
+        "conclusion": "Признаки лимфопролиферативного поражения лимфатических узлов.",
+        "recommendation": "Консультация гематолога, приоритетная морфологическая верификация наиболее измененного лимфоузла.",
+        "riskLevel": "high"
+      },
+      {
+        "requirePathologicalLymph": true,
+        "requireLymphGroupIn": [
+          "надключич"
+        ],
+        "conclusion": "Патологическая надключичная лимфаденопатия.",
+        "riskLevel": "high"
+      },
+      {
+        "requirePathologicalLymph": true,
+        "requireLymphGroupIn": [
+          "подключич"
+        ],
+        "conclusion": "Патологическая подключичная лимфаденопатия.",
+        "riskLevel": "high"
+      },
+      {
+        "requirePathologicalLymph": true,
+        "requireLymphGroupIn": [
+          "яремные",
+          "поднижнечелюст"
+        ],
+        "conclusion": "Патологические изменения шейных лимфоузлов.",
+        "riskLevel": "high"
+      },
+      {
+        "requirePathologicalLymph": true,
+        "requireLymphGroupIn": [
+          "подмышеч"
+        ],
+        "conclusion": "Патологическая подмышечная лимфаденопатия.",
+        "riskLevel": "moderate"
+      },
+      {
+        "requirePathologicalLymph": true,
+        "requireLymphGroupIn": [
+          "пахов"
+        ],
+        "conclusion": "Патологическая паховая лимфаденопатия.",
+        "riskLevel": "moderate"
+      },
+      {
+        "requirePathologicalLymph": true,
+        "requireLymphGroupIn": [
+          "яремные",
+          "надключич"
+        ],
+        "conclusion": "Сочетанное поражение шейных и надключичных лимфоузлов.",
+        "riskLevel": "high"
+      },
+      {
+        "requirePathologicalLymph": true,
+        "requireLymphSides": [
+          "справа",
+          "слева"
+        ],
+        "conclusion": "Двусторонняя патологическая лимфаденопатия.",
+        "riskLevel": "high"
+      },
+      {
+        "requireReactiveLymph": true,
+        "requireNoPathologicalLymph": true,
+        "conclusion": "Реактивная лимфаденопатия без достоверных патологических признаков.",
+        "riskLevel": "benign"
+      },
+      {
+        "requirePathologicalOrQuestionLymph": true,
+        "requireReactiveLymph": true,
+        "conclusion": "Смешанные изменения лимфоузлов: патологические/сомнительные и реактивные.",
+        "riskLevel": "high"
+      }
+    ],
+    "qualityRules": {
+      "incompleteDataConclusion": "Данные неполные, требуется клиническая корреляция."
+    },
+    "deduplication": {
+      "enabled": true,
+      "mode": "exact"
+    },
+    "outputFormat": {
+      "conclusionPrefix": "Заключение",
+      "recommendationPrefix": "Рекомендации",
+      "joinMode": "space"
+    }
   }
 }
