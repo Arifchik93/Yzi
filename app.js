@@ -1603,6 +1603,16 @@ function renderRow(row, onChange) {
 function renderBlocks(blocks) {
   formContainer.innerHTML = "";
 
+  const handleFormChange = () => {
+    const changed = enforceBreastDependencies(blocks);
+    if (changed) {
+      renderBlocks(blocks);
+      updateOutput();
+      return;
+    }
+    updateOutput();
+  };
+
   blocks.forEach((block) => {
     const wrapper = document.createElement("div");
     wrapper.className = "form-block";
@@ -1621,7 +1631,7 @@ function renderBlocks(blocks) {
     const renderRows = () => {
       rowsContainer.innerHTML = "";
       block.rows.forEach((row, index) => {
-        const rowEl = renderRow(row, updateOutput);
+        const rowEl = renderRow(row, handleFormChange);
         rowsContainer.appendChild(rowEl);
 
         if (block.type === "repeat") {
@@ -1634,7 +1644,7 @@ function renderBlocks(blocks) {
             removeButton.addEventListener("click", () => {
               block.rows.splice(index, 1);
               renderRows();
-              updateOutput();
+              handleFormChange();
             });
             controls.appendChild(removeButton);
           }
@@ -1651,13 +1661,87 @@ function renderBlocks(blocks) {
       addButton.addEventListener("click", () => {
         block.rows.push(createRow(block.content));
         renderRows();
-        updateOutput();
+        handleFormChange();
       });
       wrapper.appendChild(addButton);
     }
 
     formContainer.appendChild(wrapper);
   });
+}
+
+function getRowFieldSegments(row) {
+  return (row?.segments || []).filter((segment) => segment.type === "field");
+}
+
+function setSegmentOptionByToken(segment, token) {
+  if (!segment || !Array.isArray(segment.options)) return false;
+  const targetIndex = segment.options.findIndex((option) => (option.raw || "").includes(token));
+  if (targetIndex < 0 || segment.selectedOptionIndex === targetIndex) return false;
+  segment.selectedOptionIndex = targetIndex;
+  segment.value = assembleOption(segment.options[targetIndex]);
+  return true;
+}
+
+function getBlockFieldValue(block) {
+  const row = block?.rows?.[0];
+  const field = getRowFieldSegments(row)[0];
+  return (field?.value || "").trim();
+}
+
+function enforceBreastDependencies(blocks) {
+  const isBreastTemplate = blocks.some((block) =>
+    typeof block.content === "string" && block.content.startsWith("\nПравая молочная железа:")
+  );
+  if (!isBreastTemplate) return false;
+
+  let changed = false;
+
+  const rightOperation = getBlockFieldValue(blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("\nПравая молочная железа:")
+  ));
+  const leftOperation = getBlockFieldValue(blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("\nЛевая молочная железа:")
+  ));
+
+  const morphotypeBlocks = blocks.filter((block) =>
+    typeof block.content === "string" && block.content.startsWith("Ультразвуковой морфотип:")
+  );
+  const tissueBlocks = blocks.filter((block) =>
+    typeof block.content === "string" && block.content.startsWith("Преобладание ткани:")
+  );
+  const ductBlocks = blocks.filter((block) =>
+    typeof block.content === "string" && block.content.startsWith("Млечные протоки:")
+  );
+
+  const applyOperationDependencies = (side, operation) => {
+    const hasOperation = operation === "секторальная резекция" || operation === "мастэктомия";
+    if (hasOperation) {
+      const lesionBlock = blocks.find((block) => block.title === `Выявленные образования (${side})`);
+      (lesionBlock?.rows || []).forEach((row) => {
+        const fields = getRowFieldSegments(row);
+        if (setSegmentOptionByToken(fields[1], "в зоне послеоперационного рубца")) {
+          changed = true;
+        }
+      });
+    }
+
+    if (operation === "мастэктомия") {
+      const sideIndex = side === "правая" ? 0 : 1;
+      const targets = [morphotypeBlocks[sideIndex], tissueBlocks[sideIndex], ductBlocks[sideIndex]];
+      targets.forEach((block) => {
+        const field = getRowFieldSegments(block?.rows?.[0])[0];
+        if (setSegmentOptionByToken(field, "-")) {
+          changed = true;
+        }
+      });
+    }
+  };
+
+  applyOperationDependencies("правая", rightOperation);
+  applyOperationDependencies("левая", leftOperation);
+
+  return changed;
 }
 
 function applyTemplate(template) {
