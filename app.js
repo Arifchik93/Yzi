@@ -456,7 +456,7 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
       if (!operation) return;
       const scarLesions = context.lesions.filter((item) => item.side === sideKey && item.isScarZone);
       const scarText = scarLesions.length
-        ? `в зоне п/о рубца визуализируются ${scarLesions
+        ? `в зоне п/о рубца: ${scarLesions
           .map((item) => [item.rawType, item.classification].filter(Boolean).join(" "))
           .filter(Boolean)
           .join("; ")}`
