@@ -456,7 +456,10 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
       if (!operation) return;
       const scarLesions = context.lesions.filter((item) => item.side === sideKey && item.isScarZone);
       const scarText = scarLesions.length
-        ? "в зоне п/о рубца визуализируются послеоперационные изменения"
+        ? `в зоне п/о рубца визуализируются ${scarLesions
+          .map((item) => [item.rawType, item.classification].filter(Boolean).join(" "))
+          .filter(Boolean)
+          .join("; ")}`
         : "зона п/о рубца без дополнительных особенностей";
       postOpConclusions.push(`Состояние после ${operation} ${sideLabel} молочной железы, ${scarText}.`);
     };
@@ -475,7 +478,14 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
   applyDuctRules(context, protocolRules.ductRules || [], pushConclusion, recommendationParts, setRisk);
   applyMorphotypeRules(context, protocolRules.morphotypeRules || [], pushConclusion, recommendationParts, setRisk);
   applyLesionsRule(context, protocolRules.lesionsRule, pushConclusion);
-  applyNoduleRules(context, protocolRules.noduleRules || [], pushConclusion, recommendationParts, setRisk);
+  applyNoduleRules(
+    context,
+    protocolRules.noduleRules || [],
+    pushConclusion,
+    recommendationParts,
+    setRisk,
+    { suppressConclusion: protocolId === "breast" }
+  );
   applyLymphRule(context, protocolRules.lymphRule, pushConclusion, recommendationParts, setRisk);
   applyCombinedRules(context, protocolRules.combinedRules || [], pushConclusion, recommendationParts, setRisk);
 
@@ -658,6 +668,7 @@ function collectBreastContext(blocks, protocolRules) {
     operation: "",
     operations: { right: "", left: "" },
     ducts: "",
+    ductsBySide: { right: "", left: "" },
     lesionSides: new Set(),
     lesionQuadrants: new Set(),
     lymphRows: [],
@@ -686,12 +697,16 @@ function collectBreastContext(blocks, protocolRules) {
   context.operation = [context.operations.right, context.operations.left].filter(Boolean).join("; ");
   context.hasOperation = Boolean(context.operation);
 
-  const ductsBlock = blocks.find((block) =>
+  const ductsBlocks = blocks.filter((block) =>
     typeof block.content === "string" && block.content.startsWith("Млечные протоки:")
   );
-  if (ductsBlock?.rows?.[0]) {
-    context.ducts = getFieldValues(ductsBlock.rows[0])[0] || "";
+  if (ductsBlocks[0]?.rows?.[0]) {
+    context.ductsBySide.right = getFieldValues(ductsBlocks[0].rows[0])[0] || "";
   }
+  if (ductsBlocks[1]?.rows?.[0]) {
+    context.ductsBySide.left = getFieldValues(ductsBlocks[1].rows[0])[0] || "";
+  }
+  context.ducts = [context.ductsBySide.right, context.ductsBySide.left].filter(Boolean).join("; ");
 
   const lesionRows = blocks
     .filter((block) => typeof block.title === "string" && block.title.startsWith("Выявленные образования"))
@@ -889,6 +904,26 @@ function applyTopographyRules(context, rules, pushConclusion, recommendationPart
 }
 
 function applyDuctRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  const sideLabels = { right: "справа", left: "слева" };
+
+  if (context?.ductsBySide && (context.ductsBySide.right || context.ductsBySide.left)) {
+    rules.forEach((rule) => {
+      if (!rule) return;
+      ["right", "left"].forEach((sideKey) => {
+        const ducts = context.ductsBySide[sideKey] || "";
+        if (!ducts) return;
+        const ductsOk = !rule.ductsIncludes || rule.ductsIncludes.some((token) => ducts.includes(token));
+        if (!ductsOk) return;
+
+        const sideConclusion = rule.conclusion?.replace(/\.$/, "") + ` ${sideLabels[sideKey]}.`;
+        pushConclusion(sideConclusion);
+        if (rule.recommendation) recommendationParts.push(rule.recommendation);
+        setRisk(rule.riskLevel || "benign");
+      });
+    });
+    return;
+  }
+
   rules.forEach((rule) => {
     if (!rule) return;
     const ducts = context.ducts || "";
@@ -940,7 +975,8 @@ function applyLesionsRule(context, rule, pushConclusion) {
   pushConclusion(`${prefix}: ${items.join("; ")}.`);
 }
 
-function applyNoduleRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+function applyNoduleRules(context, rules, pushConclusion, recommendationParts, setRisk, options = {}) {
+  const { suppressConclusion = false } = options;
   const mainRules = rules.filter((rule) => ["tirads-main", "birads-main"].includes(rule?.group));
   const otherRules = rules.filter((rule) => !["tirads-main", "birads-main"].includes(rule?.group));
 
@@ -1009,7 +1045,9 @@ function applyNoduleRules(context, rules, pushConclusion, recommendationParts, s
       };
 
       const bestRule = matchedMainRules.sort((a, b) => pickScore(b) - pickScore(a))[0];
-      pushConclusion(bestRule.conclusion);
+      if (!suppressConclusion) {
+        pushConclusion(bestRule.conclusion);
+      }
       if (bestRule.recommendation) recommendationParts.push(bestRule.recommendation);
       setRisk(bestRule.riskLevel || "benign");
     }
@@ -1017,7 +1055,9 @@ function applyNoduleRules(context, rules, pushConclusion, recommendationParts, s
 
   otherRules.forEach((rule) => {
     if (!rule || !matchRule(rule)) return;
-    pushConclusion(rule.conclusion);
+    if (!suppressConclusion) {
+      pushConclusion(rule.conclusion);
+    }
     if (rule.recommendation) recommendationParts.push(rule.recommendation);
     setRisk(rule.riskLevel || "benign");
   });
