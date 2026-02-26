@@ -449,6 +449,24 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
       ? collectLymphContext(blocks, protocolRules)
       : collectThyroidContext(blocks, protocolRules);
 
+  if (protocolId === "breast" && context.hasOperation) {
+    const postOpConclusions = [];
+    const appendOperationConclusion = (sideKey, sideLabel) => {
+      const operation = context.operations?.[sideKey] || "";
+      if (!operation) return;
+      const scarLesions = context.lesions.filter((item) => item.side === sideKey && item.isScarZone);
+      const scarText = scarLesions.length
+        ? "в зоне п/о рубца визуализируются послеоперационные изменения"
+        : "зона п/о рубца без дополнительных особенностей";
+      postOpConclusions.push(`Состояние после ${operation} ${sideLabel} молочной железы, ${scarText}.`);
+    };
+    appendOperationConclusion("right", "правой");
+    appendOperationConclusion("left", "левой");
+    postOpConclusions.forEach(pushConclusion);
+    setRisk("high");
+    recommendationParts.push("Наблюдение у онколога (онкомаммолога).");
+  }
+
   applyAiitRule(context, protocolRules.aiitRule, pushConclusion, recommendationParts, setRisk);
   applyDiffuseRules(context, protocolRules.diffuseRules || [], pushConclusion, recommendationParts, setRisk);
   applyVolumeRules(context, protocolRules.volumeRules || [], pushConclusion, recommendationParts, setRisk);
@@ -469,7 +487,9 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
   const recommendation = buildPatientRecommendation(
     protocolRules,
     maxRiskLevel,
-    recommendationParts
+    recommendationParts,
+    context,
+    protocolId
   );
 
   const sections = [`Заключение: ${conclusions.join(" ")}`];
@@ -636,6 +656,7 @@ function collectBreastContext(blocks, protocolRules) {
     maxBirads: 0,
     morphotype: "",
     operation: "",
+    operations: { right: "", left: "" },
     ducts: "",
     lesionSides: new Set(),
     lesionQuadrants: new Set(),
@@ -646,19 +667,24 @@ function collectBreastContext(blocks, protocolRules) {
     allLymphReactive: false,
   };
 
-  const morphotypeBlock = blocks.find((block) =>
+  const morphotypeBlocks = blocks.filter((block) =>
     typeof block.content === "string" && block.content.startsWith("Ультразвуковой морфотип:")
   );
-  if (morphotypeBlock?.rows?.[0]) {
-    context.morphotype = getFieldValues(morphotypeBlock.rows[0])[0] || "";
-  }
+  context.morphotype = morphotypeBlocks
+    .map((block) => (block.rows?.[0] ? getFieldValues(block.rows[0])[0] : "") || "")
+    .filter(Boolean)
+    .join("; ");
 
-  const operationBlock = blocks.find((block) =>
-    typeof block.content === "string" && block.content.startsWith("Оперативные вмешательства:")
+  const rightOperationBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("\nПравая молочная железа:")
   );
-  if (operationBlock?.rows?.[0]) {
-    context.operation = getFieldValues(operationBlock.rows[0])[0] || "";
-  }
+  const leftOperationBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("\nЛевая молочная железа:")
+  );
+  context.operations.right = rightOperationBlock?.rows?.[0] ? getFieldValues(rightOperationBlock.rows[0])[0] || "" : "";
+  context.operations.left = leftOperationBlock?.rows?.[0] ? getFieldValues(leftOperationBlock.rows[0])[0] || "" : "";
+  context.operation = [context.operations.right, context.operations.left].filter(Boolean).join("; ");
+  context.hasOperation = Boolean(context.operation);
 
   const ductsBlock = blocks.find((block) =>
     typeof block.content === "string" && block.content.startsWith("Млечные протоки:")
@@ -669,7 +695,10 @@ function collectBreastContext(blocks, protocolRules) {
 
   const lesionRows = blocks
     .filter((block) => typeof block.title === "string" && block.title.startsWith("Выявленные образования"))
-    .flatMap((block) => block.rows || []);
+    .flatMap((block) => {
+      const side = block.title.includes("правая") ? "right" : block.title.includes("левая") ? "left" : "";
+      return (block.rows || []).map((row) => ({ row, side }));
+    });
   context.lesions = collectLesions(lesionRows);
   context.hasLesions = context.lesions.length > 0;
   context.maxBirads = context.lesions.reduce((max, item) => Math.max(max, item.birads || 0), 0);
@@ -703,9 +732,14 @@ function extractFirstNumber(value) {
 
 function collectLesions(rows) {
   return rows
-    .map((row) => getFieldValues(row))
-    .filter((fields) => fields.length >= 8)
-    .map((fields) => {
+    .map((entry) => {
+      if (entry?.row) {
+        return { fields: getFieldValues(entry.row), sideHint: entry.side || "" };
+      }
+      return { fields: getFieldValues(entry), sideHint: "" };
+    })
+    .filter(({ fields }) => fields.length >= 8)
+    .map(({ fields, sideHint }) => {
       const isBreastRow = fields.length >= 9 || /BI-RADS/i.test(fields[fields.length - 1] || "");
 
       if (isBreastRow) {
@@ -722,13 +756,15 @@ function collectLesions(rows) {
         const biradsMatch = classification.match(/BI-RADS\s*(\d)/i);
         const birads = biradsMatch ? Number.parseInt(biradsMatch[1], 10) : 0;
 
-        let side = "";
-        if (location.toLowerCase().includes("левой")) side = "left";
-        if (location.toLowerCase().includes("правой")) side = "right";
+        let side = sideHint || "";
+        if (!side && location.toLowerCase().includes("левой")) side = "left";
+        if (!side && location.toLowerCase().includes("правой")) side = "right";
 
         return {
           quadrant,
           location: [quadrant, location].filter(Boolean).join(", "),
+          sideLabel: side === "left" ? "левой" : side === "right" ? "правой" : "",
+          isScarZone: location.toLowerCase().includes("послеоперационного рубца"),
           side,
           contour,
           composition,
@@ -888,8 +924,15 @@ function applyLesionsRule(context, rule, pushConclusion) {
     return;
   }
 
-  const items = context.lesions
-    .map((item) => [item.location, item.type, item.classification].filter(Boolean).join(", "))
+  const sourceLesions = context.hasOperation
+    ? context.lesions.filter((item) => !item.isScarZone)
+    : context.lesions;
+
+  const items = sourceLesions
+    .map((item) => {
+      const sideText = item.sideLabel ? `${item.sideLabel} молочной железы` : "";
+      return [sideText, item.location, item.type, item.classification].filter(Boolean).join(", ");
+    })
     .filter(Boolean);
 
   if (!items.length) return;
@@ -1218,12 +1261,17 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
   });
 }
 
-function buildPatientRecommendation(protocolRules, riskLevel, recommendationParts) {
+function buildPatientRecommendation(protocolRules, riskLevel, recommendationParts, context = {}, protocolId = "") {
   const templates = protocolRules.recommendationTemplates || {};
   const followUpMonthsByRisk = protocolRules.followUpMonthsByRisk || { benign: 12, moderate: 6, high: 3 };
 
   const followUpMonths = followUpMonthsByRisk[riskLevel] || 12;
   const isOncoRisk = riskLevel === "moderate" || riskLevel === "high";
+
+  if (protocolId === "breast" && context?.hasOperation) {
+    const followUpText = (templates.followUpPrefix || "Контрольное УЗИ") + ` через ${followUpMonths} мес.`;
+    return `Наблюдение у онколога (онкомаммолога). ${followUpText}`;
+  }
 
   const hasUrgentRecommendation = recommendationParts.some((value) =>
     (value || "").toLowerCase().includes("сроч")
