@@ -40,6 +40,7 @@ let editorTemplateLabel = "";
 const localTemplatePrefix = "local-template-";
 const conclusionRulesFile = "conclusionRules.json";
 let conclusionRulesConfig = {};
+let breastDependencyState = { rightOperation: "", leftOperation: "" };
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -1674,9 +1675,12 @@ function getRowFieldSegments(row) {
   return (row?.segments || []).filter((segment) => segment.type === "field");
 }
 
-function setSegmentOptionByToken(segment, token) {
+function setSegmentOptionByToken(segment, token, { exact = false } = {}) {
   if (!segment || !Array.isArray(segment.options)) return false;
-  const targetIndex = segment.options.findIndex((option) => (option.raw || "").includes(token));
+  const targetIndex = segment.options.findIndex((option) => {
+    const raw = (option.raw || "").trim();
+    return exact ? raw === token : raw.includes(token);
+  });
   if (targetIndex < 0 || segment.selectedOptionIndex === targetIndex) return false;
   segment.selectedOptionIndex = targetIndex;
   segment.value = assembleOption(segment.options[targetIndex]);
@@ -1714,9 +1718,11 @@ function enforceBreastDependencies(blocks) {
     typeof block.content === "string" && block.content.startsWith("Млечные протоки:")
   );
 
-  const applyOperationDependencies = (side, operation) => {
-    const hasOperation = operation === "секторальная резекция" || operation === "мастэктомия";
-    if (hasOperation) {
+  const applyOperationDependencies = (side, operation, prevOperation) => {
+    const switchedToOperation =
+      operation !== prevOperation && (operation === "секторальная резекция" || operation === "мастэктомия");
+
+    if (switchedToOperation) {
       const lesionBlock = blocks.find((block) => block.title === `Выявленные образования (${side})`);
       (lesionBlock?.rows || []).forEach((row) => {
         const fields = getRowFieldSegments(row);
@@ -1726,20 +1732,25 @@ function enforceBreastDependencies(blocks) {
       });
     }
 
-    if (operation === "мастэктомия") {
+    if (operation === "мастэктомия" && operation !== prevOperation) {
       const sideIndex = side === "правая" ? 0 : 1;
       const targets = [morphotypeBlocks[sideIndex], tissueBlocks[sideIndex], ductBlocks[sideIndex]];
       targets.forEach((block) => {
         const field = getRowFieldSegments(block?.rows?.[0])[0];
-        if (setSegmentOptionByToken(field, "-")) {
+        if (setSegmentOptionByToken(field, "-", { exact: true })) {
           changed = true;
         }
       });
     }
   };
 
-  applyOperationDependencies("правая", rightOperation);
-  applyOperationDependencies("левая", leftOperation);
+  applyOperationDependencies("правая", rightOperation, breastDependencyState.rightOperation);
+  applyOperationDependencies("левая", leftOperation, breastDependencyState.leftOperation);
+
+  breastDependencyState = {
+    rightOperation,
+    leftOperation,
+  };
 
   return changed;
 }
@@ -1749,6 +1760,8 @@ function applyTemplate(template) {
     ...block,
     rows: [createRow(block.content)],
   }));
+
+  breastDependencyState = { rightOperation: "", leftOperation: "" };
 
   renderBlocks(currentBlocks);
   updateOutput();
