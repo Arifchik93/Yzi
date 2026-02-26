@@ -635,6 +635,7 @@ function collectBreastContext(blocks, protocolRules) {
     maxTirads: 0,
     maxBirads: 0,
     morphotype: "",
+    operation: "",
     ducts: "",
     lesionSides: new Set(),
     lesionQuadrants: new Set(),
@@ -652,6 +653,13 @@ function collectBreastContext(blocks, protocolRules) {
     context.morphotype = getFieldValues(morphotypeBlock.rows[0])[0] || "";
   }
 
+  const operationBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Оперативные вмешательства:")
+  );
+  if (operationBlock?.rows?.[0]) {
+    context.operation = getFieldValues(operationBlock.rows[0])[0] || "";
+  }
+
   const ductsBlock = blocks.find((block) =>
     typeof block.content === "string" && block.content.startsWith("Млечные протоки:")
   );
@@ -659,8 +667,10 @@ function collectBreastContext(blocks, protocolRules) {
     context.ducts = getFieldValues(ductsBlock.rows[0])[0] || "";
   }
 
-  const lesionBlock = blocks.find((block) => block.title === "Выявленные образования");
-  context.lesions = collectLesions(lesionBlock?.rows || []);
+  const lesionRows = blocks
+    .filter((block) => typeof block.title === "string" && block.title.startsWith("Выявленные образования"))
+    .flatMap((block) => block.rows || []);
+  context.lesions = collectLesions(lesionRows);
   context.hasLesions = context.lesions.length > 0;
   context.maxBirads = context.lesions.reduce((max, item) => Math.max(max, item.birads || 0), 0);
 
@@ -1156,6 +1166,12 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
       || context.lesions.some((item) => rule.requireTagIncludes.some((token) => item.type.includes(token)));
     const morphotypeMatch = !rule.requireMorphotypeIncludes
       || rule.requireMorphotypeIncludes.some((token) => (context.morphotype || "").includes(token));
+    const operationMatch = !rule.requireOperationIncludes
+      || rule.requireOperationIncludes.some((token) => (context.operation || "").includes(token));
+    const lesionLocationMatch = !rule.requireLesionLocationIncludes
+      || context.lesions.some((item) =>
+        rule.requireLesionLocationIncludes.every((token) => (item.location || "").includes(token))
+      );
     const ductsExpandedMatch = !rule.requireDuctsExpanded || (context.ducts || "").includes("расширены");
     const onlyAxillaryLymphMatch = !rule.requireOnlyAxillaryLymph
       || significantLymphRows.every((row) => row.group.toLowerCase().includes("подмышеч"));
@@ -1186,6 +1202,8 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
       && vascularityMatch
       && tagMatch
       && morphotypeMatch
+      && operationMatch
+      && lesionLocationMatch
       && ductsExpandedMatch
       && onlyAxillaryLymphMatch
       && lymphSideMatch
