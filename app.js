@@ -450,6 +450,10 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
       ? collectLymphContext(blocks, protocolRules)
       : collectThyroidContext(blocks, protocolRules);
 
+  if (protocolId === "thyroidnecklymph") {
+    appendThyroidPostOperationConclusions(context, pushConclusion, setRisk);
+  }
+
   if (protocolId === "breast" && context.hasOperation) {
     const postOpConclusions = [];
     const appendOperationConclusion = (sideKey, sideLabel) => {
@@ -511,6 +515,43 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
   return sections.join("\n");
 }
 
+function appendThyroidPostOperationConclusions(context, pushConclusion, setRisk) {
+  const rightOperation = context.thyroidOperations?.right || "none";
+  const leftOperation = context.thyroidOperations?.left || "none";
+  const operatedSides = [];
+
+  if (rightOperation !== "none") {
+    operatedSides.push({ side: "справа", operation: rightOperation });
+  }
+  if (leftOperation !== "none") {
+    operatedSides.push({ side: "слева", operation: leftOperation });
+  }
+
+  if (!operatedSides.length) return;
+
+  if (rightOperation === "removed" && leftOperation === "removed") {
+    pushConclusion("Состояние после тотальной тиреоидэктомии.");
+    pushConclusion("Ложе удаленной железы без опухолевидных образований.");
+    setRisk("moderate");
+    return;
+  }
+
+  const resectionSides = operatedSides.map((item) => item.side).join(" и ");
+  pushConclusion(`Состояние после резекции щитовидной железы ${resectionSides}.`);
+
+  operatedSides.forEach(({ side, operation }) => {
+    if (operation === "resected") {
+      pushConclusion(`Тиреоидный остаток ${side} без особенностей.`);
+      return;
+    }
+    if (operation === "removed") {
+      pushConclusion(`Ложе удаленной железы ${side} без опухолевидных образований.`);
+    }
+  });
+
+  setRisk("moderate");
+}
+
 function collectThyroidContext(blocks, protocolRules) {
   const context = {
     blocks,
@@ -524,6 +565,7 @@ function collectThyroidContext(blocks, protocolRules) {
     lesions: [],
     hasLesions: false,
     maxTirads: 0,
+    thyroidOperations: { right: "none", left: "none" },
     lymphRows: [],
     hasPathologicalLymph: false,
     hasPathologicalQuestionLymph: false,
@@ -589,6 +631,30 @@ function collectThyroidContext(blocks, protocolRules) {
   context.lesions = collectLesions(lesionBlock?.rows || []);
   context.hasLesions = context.lesions.length > 0;
   context.maxTirads = context.lesions.reduce((max, item) => Math.max(max, item.tirads || 0), 0);
+
+  const rightLobeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Правая доля:")
+  );
+  if (rightLobeBlock?.rows?.[0]) {
+    const rightLobeState = (getFieldValues(rightLobeBlock.rows[0])[0] || "").toLowerCase();
+    if (rightLobeState.includes("удалена")) {
+      context.thyroidOperations.right = "removed";
+    } else if (rightLobeState.includes("резецирована")) {
+      context.thyroidOperations.right = "resected";
+    }
+  }
+
+  const leftLobeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Левая доля:")
+  );
+  if (leftLobeBlock?.rows?.[0]) {
+    const leftLobeState = (getFieldValues(leftLobeBlock.rows[0])[0] || "").toLowerCase();
+    if (leftLobeState.includes("удалена")) {
+      context.thyroidOperations.left = "removed";
+    } else if (leftLobeState.includes("резецирована")) {
+      context.thyroidOperations.left = "resected";
+    }
+  }
 
   context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
   const significantLymph = context.lymphRows.filter(({ fields }) => {
