@@ -390,11 +390,28 @@ function assembleInlineSegment(segment) {
     .join("");
 }
 
+function normalizeThyroidLobeRowText(value) {
+  if (!value) return value;
+
+  const noDash = value
+    .replace(/^(Правая доля:)\s*-\s*/u, "$1 ")
+    .replace(/^(Левая доля:)\s*-\s*/u, "$1 ");
+
+  const hasPostOpToken = /Правая доля:.*(удалена|резецирована)|Левая доля:.*(удалена|резецирована)/u.test(noDash);
+  if (!hasPostOpToken) {
+    return noDash;
+  }
+
+  return noDash.replace(/\s+[\d.,]*\*[\d.,]*\*[\d.,]*\s*мм\s*---\s*V(?:пр|лев)\s*=\s*[\d.,]*\s*см3/gu, "");
+}
+
 function updateOutput() {
+  const isThyroidProtocol = protocolSelect.value === "thyroidnecklymph";
   const text = currentBlocks
     .map((block) => {
       if (block.type === "text") {
-        return assembleRow(block.rows[0]);
+        const rowText = assembleRow(block.rows[0]);
+        return isThyroidProtocol ? normalizeThyroidLobeRowText(rowText) : rowText;
       }
       const rowsText = block.rows
         .map((row) => assembleRow(row).trim())
@@ -662,6 +679,8 @@ function collectThyroidContext(blocks, protocolRules) {
     return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
   });
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
+  const lymphoproliferativeTokens = (protocolRules.lymphRule?.lymphoproliferativeTokens || ["лимфопролифератив"])
+    .map((value) => (value || "").toLowerCase());
   context.hasPathologicalLymph = statuses.some((status) =>
     (status.includes("патологический") || lymphoproliferativeTokens.some((token) => token && status.includes(token)))
     && !status.includes("?")
