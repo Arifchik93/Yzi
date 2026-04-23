@@ -466,7 +466,9 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
     ? collectBreastContext(blocks, protocolRules)
     : protocolId === "lymph"
       ? collectLymphContext(blocks, protocolRules)
-      : collectThyroidContext(blocks, protocolRules);
+      : protocolId === "bladderprostate"
+        ? collectBladderProstateContext(blocks, protocolRules)
+        : collectThyroidContext(blocks, protocolRules);
 
   if (protocolId === "thyroidnecklymph") {
     appendThyroidPostOperationConclusions(context, pushConclusion, setRisk);
@@ -511,6 +513,9 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
   );
   applyLymphRule(context, protocolRules.lymphRule, pushConclusion, recommendationParts, setRisk);
   applyCombinedRules(context, protocolRules.combinedRules || [], pushConclusion, recommendationParts, setRisk);
+  if (protocolId === "bladderprostate") {
+    applyBladderProstateRules(context, protocolRules.bladderProstateRules || [], pushConclusion, recommendationParts, setRisk);
+  }
 
   if (!conclusions.length) {
     const fallback = protocolRules.fallbackConclusion || "Значимых изменений по данным УЗИ не выявлено.";
@@ -693,6 +698,115 @@ function collectThyroidContext(blocks, protocolRules) {
   context.allLymphReactive = statuses.length > 0 && statuses.every((status) => status.includes("реактив") || status.includes("гиперплаз"));
 
   return context;
+}
+
+function collectBladderProstateContext(blocks) {
+  const context = {
+    blocks,
+    prostateVolume: null,
+    residualUrineVolume: null,
+    prostateUrethra: "",
+    focalRows: [],
+    bladderMassRows: [],
+    bladderContour: "",
+    bladderWall: "",
+    bladderContent: "",
+  };
+
+  const prostateVolumeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Размеры:")
+  );
+  if (prostateVolumeBlock?.rows?.[0]) {
+    context.prostateVolume = extractFirstNumber(assembleRow(prostateVolumeBlock.rows[0]));
+  }
+
+  const residualVolumeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Остаточный объём мочи")
+  );
+  if (residualVolumeBlock?.rows?.[0]) {
+    context.residualUrineVolume = extractFirstNumber(assembleRow(residualVolumeBlock.rows[0]));
+  }
+
+  const prostateUrethraBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Простатическая часть уретры:")
+  );
+  if (prostateUrethraBlock?.rows?.[0]) {
+    context.prostateUrethra = (getFieldValues(prostateUrethraBlock.rows[0])[0] || "").toLowerCase();
+  }
+
+  const bladderContourBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Внутренний контур:")
+  );
+  if (bladderContourBlock?.rows?.[0]) {
+    context.bladderContour = (getFieldValues(bladderContourBlock.rows[0])[0] || "").toLowerCase();
+  }
+
+  const bladderWallBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Стенка:")
+  );
+  if (bladderWallBlock?.rows?.[0]) {
+    context.bladderWall = getFieldValues(bladderWallBlock.rows[0]).join(" ").toLowerCase();
+  }
+
+  const bladderContentBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Содержимое:")
+  );
+  if (bladderContentBlock?.rows?.[0]) {
+    context.bladderContent = (getFieldValues(bladderContentBlock.rows[0])[0] || "").toLowerCase();
+  }
+
+  const focalBlock = blocks.find((block) => block.title === "Очаговые изменения");
+  context.focalRows = (focalBlock?.rows || []).map((row) => getFieldValues(row).map((v) => v.toLowerCase()));
+
+  const bladderMassBlock = blocks.find((block) => block.title === "Объемные образования");
+  context.bladderMassRows = (bladderMassBlock?.rows || []).map((row) => getFieldValues(row).map((v) => v.toLowerCase()));
+
+  return context;
+}
+
+function applyBladderProstateRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  rules.forEach((rule) => {
+    if (!rule) return;
+
+    const checks = [];
+    if (rule.minProstateVolume != null) {
+      checks.push((context.prostateVolume ?? -Infinity) >= rule.minProstateVolume);
+    }
+    if (rule.prostateUrethraIncludes?.length) {
+      checks.push(rule.prostateUrethraIncludes.some((token) => context.prostateUrethra.includes(token.toLowerCase())));
+    }
+    if (rule.anyFocalIncludes?.length) {
+      checks.push(context.focalRows.some((fields) =>
+        rule.anyFocalIncludes.some((token) => fields.some((field) => field.includes(token.toLowerCase())))
+      ));
+    }
+    if (rule.anyBladderMassIncludes?.length) {
+      checks.push(context.bladderMassRows.some((fields) =>
+        rule.anyBladderMassIncludes.some((token) => fields.some((field) => field.includes(token.toLowerCase())))
+      ));
+    }
+    if (rule.bladderContourIncludes?.length) {
+      checks.push(rule.bladderContourIncludes.some((token) => context.bladderContour.includes(token.toLowerCase())));
+    }
+    if (rule.bladderWallIncludes?.length) {
+      checks.push(rule.bladderWallIncludes.some((token) => context.bladderWall.includes(token.toLowerCase())));
+    }
+    if (rule.bladderContentIncludes?.length) {
+      checks.push(rule.bladderContentIncludes.some((token) => context.bladderContent.includes(token.toLowerCase())));
+    }
+    if (rule.minResidualUrineVolume != null) {
+      checks.push((context.residualUrineVolume ?? -Infinity) >= rule.minResidualUrineVolume);
+    }
+    if (rule.maxResidualUrineVolume != null) {
+      checks.push((context.residualUrineVolume ?? Infinity) <= rule.maxResidualUrineVolume);
+    }
+
+    if (!checks.length || !checks.every(Boolean)) return;
+
+    pushConclusion(rule.conclusion);
+    if (rule.recommendation) recommendationParts.push(rule.recommendation);
+    setRisk(rule.riskLevel || "moderate");
+  });
 }
 
 function collectLymphContext(blocks, protocolRules) {
@@ -1391,6 +1505,11 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
 function buildPatientRecommendation(protocolRules, riskLevel, recommendationParts, context = {}, protocolId = "") {
   const templates = protocolRules.recommendationTemplates || {};
   const followUpMonthsByRisk = protocolRules.followUpMonthsByRisk || { benign: 12, moderate: 6, high: 3 };
+  if (protocolId === "bladderprostate") {
+    return recommendationParts
+      .filter((value, index, arr) => value && arr.indexOf(value) === index)
+      .join(" ");
+  }
 
   const followUpMonths = followUpMonthsByRisk[riskLevel] || 12;
   const isOncoRisk = riskLevel === "moderate" || riskLevel === "high";
