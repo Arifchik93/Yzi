@@ -41,6 +41,7 @@ const localTemplatePrefix = "local-template-";
 const conclusionRulesFile = "conclusionRules.json";
 let conclusionRulesConfig = {};
 let breastDependencyState = { rightOperation: "", leftOperation: "" };
+let prostatePostOperationState = "";
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -1690,7 +1691,7 @@ function renderBlocks(blocks) {
   formContainer.innerHTML = "";
 
   const handleFormChange = () => {
-    const changed = enforceBreastDependencies(blocks);
+    const changed = enforceTemplateDependencies(blocks);
     if (changed) {
       renderBlocks(blocks);
       updateOutput();
@@ -1840,6 +1841,64 @@ function enforceBreastDependencies(blocks) {
   return changed;
 }
 
+function enforceProstateDependencies(blocks) {
+  const isBladderProstateTemplate = blocks.some((block) =>
+    typeof block.content === "string" && block.content.includes("Ультразвуковое исследование предстательной железы")
+  );
+  if (!isBladderProstateTemplate) return false;
+
+  let changed = false;
+  const postOpBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.trim().startsWith("{ / состояние после ТУР простаты")
+  );
+  const postOpField = getRowFieldSegments(postOpBlock?.rows?.[0])[0];
+  const postOperation = (postOpField?.value || "").trim();
+
+  const switchedToProstatectomy =
+    postOperation === "состояние после простатэктомии" &&
+    prostatePostOperationState !== "состояние после простатэктомии";
+
+  if (switchedToProstatectomy) {
+    const targetPrefixes = [
+      "Размеры:",
+      "Контуры:",
+      "Структура паренхимы:",
+      "Эхогенность:",
+      "Простатическая часть уретры:",
+      "Семенные пузырьки:",
+      "Периферическая зона:",
+    ];
+
+    targetPrefixes.forEach((prefix) => {
+      const block = blocks.find((item) => typeof item.content === "string" && item.content.startsWith(prefix));
+      const field = getRowFieldSegments(block?.rows?.[0])[0];
+      if (setSegmentOptionByToken(field, "-", { exact: true })) {
+        changed = true;
+      }
+    });
+
+    const focalBlock = blocks.find((block) => block.title === "Очаговые изменения");
+    (focalBlock?.rows || []).forEach((row) => {
+      const fields = getRowFieldSegments(row);
+      if (setSegmentOptionByToken(fields[1], "в ложе предстательной железы", { exact: true })) {
+        changed = true;
+      }
+      if (setSegmentOptionByToken(fields[0], "без данных за рецидив", { exact: true })) {
+        changed = true;
+      }
+    });
+  }
+
+  prostatePostOperationState = postOperation;
+  return changed;
+}
+
+function enforceTemplateDependencies(blocks) {
+  const breastChanged = enforceBreastDependencies(blocks);
+  const prostateChanged = enforceProstateDependencies(blocks);
+  return breastChanged || prostateChanged;
+}
+
 function applyTemplate(template) {
   currentBlocks = normalizeBlocks(template).map((block) => ({
     ...block,
@@ -1847,6 +1906,7 @@ function applyTemplate(template) {
   }));
 
   breastDependencyState = { rightOperation: "", leftOperation: "" };
+  prostatePostOperationState = "";
 
   renderBlocks(currentBlocks);
   updateOutput();
