@@ -448,7 +448,9 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
     ? collectBreastContext(blocks, protocolRules)
     : protocolId === "lymph"
       ? collectLymphContext(blocks, protocolRules)
-      : collectThyroidContext(blocks, protocolRules);
+      : protocolId === "bladderprostate"
+        ? collectBladderProstateContext(blocks)
+        : collectThyroidContext(blocks, protocolRules);
 
   if (protocolId === "breast" && context.hasOperation) {
     const postOpConclusions = [];
@@ -489,6 +491,13 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
   );
   applyLymphRule(context, protocolRules.lymphRule, pushConclusion, recommendationParts, setRisk);
   applyCombinedRules(context, protocolRules.combinedRules || [], pushConclusion, recommendationParts, setRisk);
+  applyBladderProstateRules(
+    context,
+    protocolId,
+    pushConclusion,
+    recommendationParts,
+    setRisk
+  );
 
   if (!conclusions.length) {
     const fallback = protocolRules.fallbackConclusion || "Значимых изменений по данным УЗИ не выявлено.";
@@ -741,9 +750,171 @@ function collectBreastContext(blocks, protocolRules) {
   return context;
 }
 
+function collectBladderProstateContext(blocks) {
+  const context = {
+    blocks,
+    bladder: {
+      access: "",
+      filling: "",
+      innerContour: "",
+      wallState: "",
+      wallEchogenicity: "",
+      contents: "",
+      stones: "",
+      ureterDilation: "",
+      ureterJets: "",
+      massRows: [],
+      hasMass: false,
+      hasVascularMass: false,
+      hasLikelyClot: false,
+      residualVolumeMl: null,
+    },
+    prostate: {
+      volumeMl: null,
+      contours: "",
+      structure: "",
+      echogenicity: "",
+      urethra: "",
+      focalRows: [],
+      peripheralZone: "",
+      seminalVesicles: "",
+      hasAdenomatousNodules: false,
+      hasSuspiciousFocalLesion: false,
+      hasInflammatoryFibrocalcificSigns: false,
+    },
+  };
+
+  const findTextBlock = (prefix) =>
+    blocks.find((block) => typeof block.content === "string" && block.content.startsWith(prefix));
+
+  const acousticBlock = findTextBlock("Акустический доступ:");
+  if (acousticBlock?.rows?.[0]) {
+    context.bladder.access = getFieldValues(acousticBlock.rows[0])[0] || "";
+  }
+
+  const fillingBlock = findTextBlock("Мочевой пузырь ");
+  if (fillingBlock?.rows?.[0]) {
+    context.bladder.filling = getFieldValues(fillingBlock.rows[0])[0] || "";
+  }
+
+  const contourBlock = findTextBlock("Внутренний контур:");
+  if (contourBlock?.rows?.[0]) {
+    context.bladder.innerContour = getFieldValues(contourBlock.rows[0])[0] || "";
+  }
+
+  const wallBlock = findTextBlock("Стенка:");
+  if (wallBlock?.rows?.[0]) {
+    const fields = getFieldValues(wallBlock.rows[0]);
+    context.bladder.wallState = fields[0] || "";
+    context.bladder.wallEchogenicity = fields[1] || "";
+  }
+
+  const contentBlock = findTextBlock("Содержимое:");
+  if (contentBlock?.rows?.[0]) {
+    context.bladder.contents = getFieldValues(contentBlock.rows[0])[0] || "";
+  }
+
+  const stoneBlock = findTextBlock("Конкременты в полости мочевого пузыря:");
+  if (stoneBlock?.rows?.[0]) {
+    context.bladder.stones = getFieldValues(stoneBlock.rows[0])[0] || "";
+  }
+
+  const ureterBlock = findTextBlock("Дистальные отделы мочеточников:");
+  if (ureterBlock?.rows?.[0]) {
+    context.bladder.ureterDilation = getFieldValues(ureterBlock.rows[0])[0] || "";
+  }
+
+  const jetsBlock = findTextBlock("Мочеточниковые выбросы:");
+  if (jetsBlock?.rows?.[0]) {
+    context.bladder.ureterJets = getFieldValues(jetsBlock.rows[0])[0] || "";
+  }
+
+  const residualBlock = findTextBlock("Остаточный объём мочи");
+  if (residualBlock?.rows?.[0]) {
+    context.bladder.residualVolumeMl = extractVolumeMlFromRow(residualBlock.rows[0]);
+  }
+
+  const massBlock = blocks.find((block) => block.title === "Объемные образования");
+  context.bladder.massRows = (massBlock?.rows || []).map((row) => normalizeSpaces(assembleRow(row)));
+  const massText = context.bladder.massRows.join(" ").toLowerCase();
+  context.bladder.hasMass = context.bladder.massRows.some((item) => item && !item.includes("не выявлены"));
+  context.bladder.hasVascularMass = context.bladder.hasMass
+    && (massText.includes("кровоток") || massText.includes("опухол"));
+  context.bladder.hasLikelyClot = context.bladder.hasMass
+    && (massText.includes("сгуст") || massText.includes("гематом") || massText.includes("подвижн"));
+
+  const prostateVolumeBlock = findTextBlock("Размеры:");
+  if (prostateVolumeBlock?.rows?.[0]) {
+    context.prostate.volumeMl = extractVolumeMlFromRow(prostateVolumeBlock.rows[0]);
+  }
+
+  const prostateContoursBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Контуры:")
+  );
+  if (prostateContoursBlock?.rows?.[0]) {
+    context.prostate.contours = getFieldValues(prostateContoursBlock.rows[0])[0] || "";
+  }
+
+  const prostateStructureBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Структура паренхимы:")
+  );
+  if (prostateStructureBlock?.rows?.[0]) {
+    context.prostate.structure = getFieldValues(prostateStructureBlock.rows[0])[0] || "";
+  }
+
+  const prostateEchoBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Эхогенность:")
+  );
+  if (prostateEchoBlock?.rows?.[0]) {
+    context.prostate.echogenicity = getFieldValues(prostateEchoBlock.rows[0])[0] || "";
+  }
+
+  const urethraBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Простатическая часть уретры:")
+  );
+  if (urethraBlock?.rows?.[0]) {
+    context.prostate.urethra = getFieldValues(urethraBlock.rows[0])[0] || "";
+  }
+
+  const focalBlock = blocks.find((block) => block.title === "Очаговые изменения");
+  context.prostate.focalRows = (focalBlock?.rows || []).map((row) => normalizeSpaces(assembleRow(row)));
+  const focalText = context.prostate.focalRows.join(" ").toLowerCase();
+  context.prostate.hasAdenomatousNodules = focalText.includes("аденоматоз");
+  context.prostate.hasSuspiciousFocalLesion = focalText.includes("гипоэхогенное образование")
+    && (focalText.includes("хаотич") || focalText.includes("очагово усилен") || focalText.includes("усилен"));
+  context.prostate.hasInflammatoryFibrocalcificSigns =
+    (focalText.includes("кальцинат") || focalText.includes("фиброз"))
+    && (context.prostate.echogenicity.includes("повышена") || context.prostate.echogenicity.includes("смешанная"));
+
+  const seminalBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Семенные пузырьки:")
+  );
+  if (seminalBlock?.rows?.[0]) {
+    context.prostate.seminalVesicles = getFieldValues(seminalBlock.rows[0])[0] || "";
+  }
+
+  const peripheralZoneBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Периферическая зона:")
+  );
+  if (peripheralZoneBlock?.rows?.[0]) {
+    context.prostate.peripheralZone = getFieldValues(peripheralZoneBlock.rows[0])[0] || "";
+  }
+
+  return context;
+}
+
 function extractFirstNumber(value) {
   const match = (value || "").replace(',', '.').match(/-?\d+(?:\.\d+)?/);
   return match ? Number.parseFloat(match[0]) : null;
+}
+
+function extractVolumeMlFromRow(row) {
+  const text = normalizeSpaces(assembleRow(row)).replace(',', '.');
+  const mlMatches = [...text.matchAll(/(\d+(?:\.\d+)?)\s*мл/gi)];
+  if (mlMatches.length) {
+    return Number.parseFloat(mlMatches[mlMatches.length - 1][1]);
+  }
+  return extractFirstNumber(text);
 }
 
 function collectLesions(rows) {
@@ -1300,6 +1471,78 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
     if (rule.recommendation) recommendationParts.push(rule.recommendation);
     setRisk(rule.riskLevel || "moderate");
   });
+}
+
+function applyBladderProstateRules(context, protocolId, pushConclusion, recommendationParts, setRisk) {
+  if (protocolId !== "bladderprostate" || !context?.bladder || !context?.prostate) {
+    return;
+  }
+
+  const { bladder, prostate } = context;
+  const residual = bladder.residualVolumeMl;
+  const hasHighResidual = residual != null && residual > 50;
+  const hasVeryHighResidual = residual != null && residual > 100;
+  const hasDiffWallThickening = bladder.wallState.includes("утолщена диффузно");
+  const hasTrabecularContour = bladder.innerContour.includes("трабекуляр");
+  const poorFilling = bladder.filling.includes("недостаточно");
+  const difficultAccess = bladder.access.includes("затрудн");
+
+  if (poorFilling && difficultAccess && !bladder.hasMass) {
+    pushConclusion("Ограниченная информативность исследования мочевого пузыря из-за недостаточного наполнения.");
+    recommendationParts.push("Повторное УЗИ при адекватном наполнении мочевого пузыря.");
+    setRisk("benign");
+  }
+
+  if (hasHighResidual && hasDiffWallThickening && hasTrabecularContour) {
+    pushConclusion("УЗ-признаки хронической инфравезикальной обструкции с ремоделированием стенки мочевого пузыря.");
+    recommendationParts.push("Консультация уролога; оценка LUTS/IPSS, урофлоуметрия/уродинамика по показаниям.");
+    setRisk("moderate");
+  }
+
+  if (bladder.hasVascularMass) {
+    pushConclusion("Внутриполостное васкуляризированное образование мочевого пузыря, подозрительное на опухоль.");
+    recommendationParts.push("Приоритетная консультация онколога-уролога; решение вопроса о цистоскопии и морфологической верификации по клиническим показаниям.");
+    setRisk("high");
+  } else if (bladder.hasLikelyClot) {
+    pushConclusion("Подвижное аваскулярное внутриполостное содержимое мочевого пузыря (вероятнее сгусток/детрит).");
+    recommendationParts.push("Клинический контроль, ОАМ и контрольное УЗИ в динамике.");
+    setRisk("benign");
+  }
+
+  if (!bladder.stones.includes("не выявлены") && bladder.stones) {
+    pushConclusion("УЗ-признаки конкремента(ов) мочевого пузыря.");
+    recommendationParts.push("Консультация уролога; коррекция тактики по клиническим показаниям.");
+    setRisk("moderate");
+  }
+
+  if (hasVeryHighResidual
+    && bladder.ureterDilation.includes("билатерально")
+    && bladder.ureterJets.includes("не регистрируются")) {
+    pushConclusion("Признаки выраженного нарушения оттока мочи с вторичным уретеростазом.");
+    recommendationParts.push("Неотложная консультация уролога; контроль функции почек и срочная маршрутизация по клиническим показаниям.");
+    setRisk("high");
+  }
+
+  if ((prostate.volumeMl != null && prostate.volumeMl > 30)
+    && prostate.hasAdenomatousNodules
+    && hasHighResidual) {
+    pushConclusion("Эхографические признаки ДГПЖ с признаками инфравезикальной обструкции.");
+    recommendationParts.push("Консультация уролога; оценка LUTS/IPSS и ПСА по возрасту/рискам.");
+    setRisk("moderate");
+  }
+
+  if (prostate.hasSuspiciousFocalLesion
+    || (prostate.peripheralZone.includes("гипоэхогенна") && prostate.contours.includes("неров"))) {
+    pushConclusion("Подозрительное очаговое изменение предстательной железы (повышенный онкориск).");
+    recommendationParts.push("Консультация онколога-уролога; решение вопроса о mpMRI и верификации по клиническим показаниям.");
+    setRisk("high");
+  }
+
+  if (prostate.hasInflammatoryFibrocalcificSigns && !prostate.hasSuspiciousFocalLesion) {
+    pushConclusion("Диффузные фиброзно-кальцинатозные изменения предстательной железы (вероятнее хронические воспалительные изменения).");
+    recommendationParts.push("Консультация уролога, сопоставление с клинико-лабораторными данными.");
+    setRisk("moderate");
+  }
 }
 
 function buildPatientRecommendation(protocolRules, riskLevel, recommendationParts, context = {}, protocolId = "") {
