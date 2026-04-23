@@ -390,11 +390,28 @@ function assembleInlineSegment(segment) {
     .join("");
 }
 
+function normalizeThyroidLobeRowText(value) {
+  if (!value) return value;
+
+  const noDash = value
+    .replace(/^(Правая доля:)\s*-\s*/u, "$1 ")
+    .replace(/^(Левая доля:)\s*-\s*/u, "$1 ");
+
+  const hasPostOpToken = /Правая доля:.*(удалена|резецирована)|Левая доля:.*(удалена|резецирована)/u.test(noDash);
+  if (!hasPostOpToken) {
+    return noDash;
+  }
+
+  return noDash.replace(/\s+[\d.,]*\*[\d.,]*\*[\d.,]*\s*мм\s*---\s*V(?:пр|лев)\s*=\s*[\d.,]*\s*см3/gu, "");
+}
+
 function updateOutput() {
+  const isThyroidProtocol = protocolSelect.value === "thyroidnecklymph";
   const text = currentBlocks
     .map((block) => {
       if (block.type === "text") {
-        return assembleRow(block.rows[0]);
+        const rowText = assembleRow(block.rows[0]);
+        return isThyroidProtocol ? normalizeThyroidLobeRowText(rowText) : rowText;
       }
       const rowsText = block.rows
         .map((row) => assembleRow(row).trim())
@@ -449,6 +466,10 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
     : protocolId === "lymph"
       ? collectLymphContext(blocks, protocolRules)
       : collectThyroidContext(blocks, protocolRules);
+
+  if (protocolId === "thyroidnecklymph") {
+    appendThyroidPostOperationConclusions(context, pushConclusion, setRisk);
+  }
 
   if (protocolId === "breast" && context.hasOperation) {
     const postOpConclusions = [];
@@ -511,6 +532,43 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
   return sections.join("\n");
 }
 
+function appendThyroidPostOperationConclusions(context, pushConclusion, setRisk) {
+  const rightOperation = context.thyroidOperations?.right || "none";
+  const leftOperation = context.thyroidOperations?.left || "none";
+  const operatedSides = [];
+
+  if (rightOperation !== "none") {
+    operatedSides.push({ side: "справа", operation: rightOperation });
+  }
+  if (leftOperation !== "none") {
+    operatedSides.push({ side: "слева", operation: leftOperation });
+  }
+
+  if (!operatedSides.length) return;
+
+  if (rightOperation === "removed" && leftOperation === "removed") {
+    pushConclusion("Состояние после тотальной тиреоидэктомии.");
+    pushConclusion("Ложе удаленной железы без опухолевидных образований.");
+    setRisk("moderate");
+    return;
+  }
+
+  const resectionSides = operatedSides.map((item) => item.side).join(" и ");
+  pushConclusion(`Состояние после резекции щитовидной железы ${resectionSides}.`);
+
+  operatedSides.forEach(({ side, operation }) => {
+    if (operation === "resected") {
+      pushConclusion(`Тиреоидный остаток ${side} без особенностей.`);
+      return;
+    }
+    if (operation === "removed") {
+      pushConclusion(`Ложе удаленной железы ${side} без опухолевидных образований.`);
+    }
+  });
+
+  setRisk("moderate");
+}
+
 function collectThyroidContext(blocks, protocolRules) {
   const context = {
     blocks,
@@ -524,6 +582,7 @@ function collectThyroidContext(blocks, protocolRules) {
     lesions: [],
     hasLesions: false,
     maxTirads: 0,
+    thyroidOperations: { right: "none", left: "none" },
     lymphRows: [],
     hasPathologicalLymph: false,
     hasPathologicalQuestionLymph: false,
@@ -590,12 +649,38 @@ function collectThyroidContext(blocks, protocolRules) {
   context.hasLesions = context.lesions.length > 0;
   context.maxTirads = context.lesions.reduce((max, item) => Math.max(max, item.tirads || 0), 0);
 
+  const rightLobeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Правая доля:")
+  );
+  if (rightLobeBlock?.rows?.[0]) {
+    const rightLobeState = (getFieldValues(rightLobeBlock.rows[0])[0] || "").toLowerCase();
+    if (rightLobeState.includes("удалена")) {
+      context.thyroidOperations.right = "removed";
+    } else if (rightLobeState.includes("резецирована")) {
+      context.thyroidOperations.right = "resected";
+    }
+  }
+
+  const leftLobeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Левая доля:")
+  );
+  if (leftLobeBlock?.rows?.[0]) {
+    const leftLobeState = (getFieldValues(leftLobeBlock.rows[0])[0] || "").toLowerCase();
+    if (leftLobeState.includes("удалена")) {
+      context.thyroidOperations.left = "removed";
+    } else if (leftLobeState.includes("резецирована")) {
+      context.thyroidOperations.left = "resected";
+    }
+  }
+
   context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
   const significantLymph = context.lymphRows.filter(({ fields }) => {
     const amount = fields?.[0] || "";
     return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
   });
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
+  const lymphoproliferativeTokens = (protocolRules.lymphRule?.lymphoproliferativeTokens || ["лимфопролифератив"])
+    .map((value) => (value || "").toLowerCase());
   context.hasPathologicalLymph = statuses.some((status) =>
     (status.includes("патологический") || lymphoproliferativeTokens.some((token) => token && status.includes(token)))
     && !status.includes("?")
