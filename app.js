@@ -705,12 +705,21 @@ function collectBladderProstateContext(blocks) {
     blocks,
     prostateVolume: null,
     residualUrineVolume: null,
+    psaTotal: null,
+    psaFree: null,
+    psaRatio: null,
     prostateUrethra: "",
     focalRows: [],
     bladderMassRows: [],
     bladderContour: "",
     bladderWall: "",
     bladderContent: "",
+    bladderStones: "",
+    prostateContours: "",
+    peripheralZone: "",
+    seminalVesicles: "",
+    ureterDistal: "",
+    ureterJets: "",
   };
 
   const prostateVolumeBlock = blocks.find((block) =>
@@ -755,6 +764,61 @@ function collectBladderProstateContext(blocks) {
     context.bladderContent = (getFieldValues(bladderContentBlock.rows[0])[0] || "").toLowerCase();
   }
 
+  const bladderStonesBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Конкременты в полости мочевого пузыря:")
+  );
+  if (bladderStonesBlock?.rows?.[0]) {
+    context.bladderStones = (getFieldValues(bladderStonesBlock.rows[0])[0] || "").toLowerCase();
+  }
+
+  const psaBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("ПСА:")
+  );
+  if (psaBlock?.rows?.[0]) {
+    const psaText = assembleRow(psaBlock.rows[0]);
+    const numbers = (psaText.match(/-?\d+(?:[.,]\d+)?/g) || [])
+      .map((value) => Number.parseFloat(value.replace(",", ".")))
+      .filter((value) => Number.isFinite(value));
+    context.psaTotal = numbers[0] ?? null;
+    context.psaFree = numbers[1] ?? null;
+    context.psaRatio = numbers[2] ?? null;
+  }
+
+  const prostateContoursBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Контуры:")
+  );
+  if (prostateContoursBlock?.rows?.[0]) {
+    context.prostateContours = getFieldValues(prostateContoursBlock.rows[0]).join(" ").toLowerCase();
+  }
+
+  const seminalVesiclesBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Семенные пузырьки:")
+  );
+  if (seminalVesiclesBlock?.rows?.[0]) {
+    context.seminalVesicles = getFieldValues(seminalVesiclesBlock.rows[0]).join(" ").toLowerCase();
+  }
+
+  const peripheralZoneBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Периферическая зона:")
+  );
+  if (peripheralZoneBlock?.rows?.[0]) {
+    context.peripheralZone = getFieldValues(peripheralZoneBlock.rows[0]).join(" ").toLowerCase();
+  }
+
+  const ureterDistalBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Дистальные отделы мочеточников:")
+  );
+  if (ureterDistalBlock?.rows?.[0]) {
+    context.ureterDistal = getFieldValues(ureterDistalBlock.rows[0]).join(" ").toLowerCase();
+  }
+
+  const ureterJetsBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Мочеточниковые выбросы:")
+  );
+  if (ureterJetsBlock?.rows?.[0]) {
+    context.ureterJets = getFieldValues(ureterJetsBlock.rows[0]).join(" ").toLowerCase();
+  }
+
   const focalBlock = blocks.find((block) => block.title === "Очаговые изменения");
   context.focalRows = (focalBlock?.rows || []).map((row) => getFieldValues(row).map((v) => v.toLowerCase()));
 
@@ -765,6 +829,15 @@ function collectBladderProstateContext(blocks) {
 }
 
 function applyBladderProstateRules(context, rules, pushConclusion, recommendationParts, setRisk) {
+  const rowIncludesToken = (fields, token) =>
+    fields.some((field) => field.includes((token || "").toLowerCase()));
+  const rowsAnyIncludes = (rows, tokens) =>
+    rows.some((fields) => tokens.some((token) => rowIncludesToken(fields, token)));
+  const rowsAnyExcludes = (rows, tokens) =>
+    rows.every((fields) => tokens.every((token) => !rowIncludesToken(fields, token)));
+  const rowsAnyAllIncludes = (rows, tokens) =>
+    rows.some((fields) => tokens.every((token) => rowIncludesToken(fields, token)));
+
   rules.forEach((rule) => {
     if (!rule) return;
 
@@ -776,14 +849,22 @@ function applyBladderProstateRules(context, rules, pushConclusion, recommendatio
       checks.push(rule.prostateUrethraIncludes.some((token) => context.prostateUrethra.includes(token.toLowerCase())));
     }
     if (rule.anyFocalIncludes?.length) {
-      checks.push(context.focalRows.some((fields) =>
-        rule.anyFocalIncludes.some((token) => fields.some((field) => field.includes(token.toLowerCase())))
-      ));
+      checks.push(rowsAnyIncludes(context.focalRows, rule.anyFocalIncludes));
+    }
+    if (rule.anyFocalExcludes?.length) {
+      checks.push(rowsAnyExcludes(context.focalRows, rule.anyFocalExcludes));
+    }
+    if (rule.focalRowAllIncludes?.length) {
+      checks.push(rowsAnyAllIncludes(context.focalRows, rule.focalRowAllIncludes));
     }
     if (rule.anyBladderMassIncludes?.length) {
-      checks.push(context.bladderMassRows.some((fields) =>
-        rule.anyBladderMassIncludes.some((token) => fields.some((field) => field.includes(token.toLowerCase())))
-      ));
+      checks.push(rowsAnyIncludes(context.bladderMassRows, rule.anyBladderMassIncludes));
+    }
+    if (rule.anyBladderMassExcludes?.length) {
+      checks.push(rowsAnyExcludes(context.bladderMassRows, rule.anyBladderMassExcludes));
+    }
+    if (rule.bladderMassRowAllIncludes?.length) {
+      checks.push(rowsAnyAllIncludes(context.bladderMassRows, rule.bladderMassRowAllIncludes));
     }
     if (rule.bladderContourIncludes?.length) {
       checks.push(rule.bladderContourIncludes.some((token) => context.bladderContour.includes(token.toLowerCase())));
@@ -794,11 +875,38 @@ function applyBladderProstateRules(context, rules, pushConclusion, recommendatio
     if (rule.bladderContentIncludes?.length) {
       checks.push(rule.bladderContentIncludes.some((token) => context.bladderContent.includes(token.toLowerCase())));
     }
+    if (rule.bladderStonesIncludes?.length) {
+      checks.push(rule.bladderStonesIncludes.some((token) => context.bladderStones.includes(token.toLowerCase())));
+    }
+    if (rule.prostateContoursIncludes?.length) {
+      checks.push(rule.prostateContoursIncludes.some((token) => context.prostateContours.includes(token.toLowerCase())));
+    }
+    if (rule.peripheralZoneIncludes?.length) {
+      checks.push(rule.peripheralZoneIncludes.some((token) => context.peripheralZone.includes(token.toLowerCase())));
+    }
+    if (rule.seminalVesiclesIncludes?.length) {
+      checks.push(rule.seminalVesiclesIncludes.some((token) => context.seminalVesicles.includes(token.toLowerCase())));
+    }
+    if (rule.ureterDistalIncludes?.length) {
+      checks.push(rule.ureterDistalIncludes.some((token) => context.ureterDistal.includes(token.toLowerCase())));
+    }
+    if (rule.ureterJetsIncludes?.length) {
+      checks.push(rule.ureterJetsIncludes.some((token) => context.ureterJets.includes(token.toLowerCase())));
+    }
     if (rule.minResidualUrineVolume != null) {
       checks.push((context.residualUrineVolume ?? -Infinity) >= rule.minResidualUrineVolume);
     }
     if (rule.maxResidualUrineVolume != null) {
       checks.push((context.residualUrineVolume ?? Infinity) <= rule.maxResidualUrineVolume);
+    }
+    if (rule.minPsaTotal != null) {
+      checks.push((context.psaTotal ?? -Infinity) >= rule.minPsaTotal);
+    }
+    if (rule.maxPsaRatio != null) {
+      checks.push((context.psaRatio ?? Infinity) <= rule.maxPsaRatio);
+    }
+    if (rule.minPsaRatio != null) {
+      checks.push((context.psaRatio ?? -Infinity) >= rule.minPsaRatio);
     }
 
     if (!checks.length || !checks.every(Boolean)) return;
