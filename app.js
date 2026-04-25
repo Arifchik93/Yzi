@@ -1859,7 +1859,7 @@ function renderField(segment, onChange) {
   return wrapper;
 }
 
-function renderInlineSegment(segment, onChange) {
+function renderInlineSegment(segment, onChange, blocks) {
   const wrapper = document.createElement("span");
   wrapper.className = "inline-field";
 
@@ -1878,6 +1878,8 @@ function renderInlineSegment(segment, onChange) {
       }
     });
   };
+
+  const inputElementsByIndex = new Map();
 
   segment.tokens.forEach((token) => {
     if (token.type === "text") {
@@ -1906,6 +1908,7 @@ function renderInlineSegment(segment, onChange) {
         input.classList.add("field-input--date");
       }
       autoSizeInput(input);
+      inputElementsByIndex.set(token.inputIndex, input);
       input.addEventListener("input", (event) => {
         segment.inputValues[token.inputIndex] = event.target.value;
         autoSizeInput(input);
@@ -1924,11 +1927,33 @@ function renderInlineSegment(segment, onChange) {
     }
   });
 
+  if (isPsaInlineSegment(segment)) {
+    const calculateButton = document.createElement("button");
+    calculateButton.type = "button";
+    calculateButton.className = "secondary inline-action-button";
+    calculateButton.textContent = "Рассчитать";
+    calculateButton.addEventListener("click", () => {
+      const changed = calculatePsaMetrics(segment, blocks);
+      if (!changed) return;
+
+      [2, 3].forEach((inputIndex) => {
+        const input = inputElementsByIndex.get(inputIndex);
+        if (!input) return;
+        input.value = segment.inputValues[inputIndex] ?? "";
+        autoSizeInput(input);
+      });
+
+      updateSegmentValue();
+      updateCalcOutputs();
+    });
+    wrapper.appendChild(calculateButton);
+  }
+
   updateCalcOutputs();
   return wrapper;
 }
 
-function renderRow(row, onChange) {
+function renderRow(row, onChange, blocks) {
   const rowEl = document.createElement("div");
   rowEl.className = "form-row";
 
@@ -1946,7 +1971,7 @@ function renderRow(row, onChange) {
     }
 
     if (segment.type === "inline") {
-      rowEl.appendChild(renderInlineSegment(segment, onChange));
+      rowEl.appendChild(renderInlineSegment(segment, onChange, blocks));
       return;
     }
 
@@ -1987,7 +2012,7 @@ function renderBlocks(blocks) {
     const renderRows = () => {
       rowsContainer.innerHTML = "";
       block.rows.forEach((row, index) => {
-        const rowEl = renderRow(row, handleFormChange);
+        const rowEl = renderRow(row, handleFormChange, blocks);
         rowsContainer.appendChild(rowEl);
 
         if (block.type === "repeat") {
@@ -2046,6 +2071,56 @@ function getBlockFieldValue(block) {
   const row = block?.rows?.[0];
   const field = getRowFieldSegments(row)[0];
   return (field?.value || "").trim();
+}
+
+function getProstateVolumeFromBlocks(blocks) {
+  const prostateSizeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Размеры:")
+  );
+
+  return prostateSizeBlock?.rows?.[0]
+    ? extractEllipseVolume(assembleRow(prostateSizeBlock.rows[0]))
+    : null;
+}
+
+function calculatePsaMetrics(segment, blocks) {
+  if (!segment || !Array.isArray(segment.inputValues) || segment.inputValues.length < 3) {
+    return false;
+  }
+
+  const total = parseNumericValue(segment.inputValues[0]);
+  const free = parseNumericValue(segment.inputValues[1]);
+  const prostateVolume = getProstateVolumeFromBlocks(blocks);
+  let changed = false;
+
+  if (Number.isFinite(total) && total > 0 && Number.isFinite(free)) {
+    const ratio = formatNumber((free / total) * 100, 2);
+    if (segment.inputValues[2] !== ratio) {
+      segment.inputValues[2] = ratio;
+      changed = true;
+    }
+  }
+
+  if (segment.inputValues.length >= 4 && Number.isFinite(total) && total > 0 && Number.isFinite(prostateVolume) && prostateVolume > 0) {
+    const density = formatNumber(total / prostateVolume, 3);
+    if (segment.inputValues[3] !== density) {
+      segment.inputValues[3] = density;
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+function isPsaInlineSegment(segment) {
+  if (!segment || segment.type !== "inline") return false;
+  const inlineText = (segment.tokens || [])
+    .filter((token) => token.type === "text")
+    .map((token) => token.value)
+    .join("")
+    .toLowerCase();
+
+  return inlineText.includes("пса:") && inlineText.includes("плотность пса");
 }
 
 function enforceBreastDependencies(blocks) {
@@ -2156,42 +2231,6 @@ function enforceProstateDependencies(blocks) {
         changed = true;
       }
     });
-  }
-
-  const psaBlock = blocks.find((block) =>
-    typeof block.content === "string" && block.content.startsWith("ПСА:")
-  );
-  const psaRow = psaBlock?.rows?.[0];
-  const psaInlineSegment = (psaRow?.segments || []).find((segment) =>
-    segment?.type === "inline" && Array.isArray(segment.inputValues) && segment.inputValues.length >= 3
-  );
-
-  const prostateSizeBlock = blocks.find((block) =>
-    typeof block.content === "string" && block.content.startsWith("Размеры:")
-  );
-  const prostateVolume = prostateSizeBlock?.rows?.[0]
-    ? extractEllipseVolume(assembleRow(prostateSizeBlock.rows[0]))
-    : null;
-
-  if (psaInlineSegment) {
-    const total = parseNumericValue(psaInlineSegment.inputValues[0]);
-    const free = parseNumericValue(psaInlineSegment.inputValues[1]);
-
-    if (Number.isFinite(total) && total > 0 && Number.isFinite(free)) {
-      const ratio = formatNumber((free / total) * 100, 2);
-      if (psaInlineSegment.inputValues[2] !== ratio) {
-        psaInlineSegment.inputValues[2] = ratio;
-        changed = true;
-      }
-    }
-
-    if (psaInlineSegment.inputValues.length >= 4 && Number.isFinite(total) && total > 0 && Number.isFinite(prostateVolume) && prostateVolume > 0) {
-      const density = formatNumber(total / prostateVolume, 3);
-      if (psaInlineSegment.inputValues[3] !== density) {
-        psaInlineSegment.inputValues[3] = density;
-        changed = true;
-      }
-    }
   }
 
   prostatePostOperationState = postOperation;
