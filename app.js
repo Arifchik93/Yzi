@@ -708,6 +708,7 @@ function collectBladderProstateContext(blocks) {
     psaTotal: null,
     psaFree: null,
     psaRatio: null,
+    psaDensity: null,
     prostateUrethra: "",
     focalRows: [],
     bladderMassRows: [],
@@ -726,14 +727,14 @@ function collectBladderProstateContext(blocks) {
     typeof block.content === "string" && block.content.startsWith("Размеры:")
   );
   if (prostateVolumeBlock?.rows?.[0]) {
-    context.prostateVolume = extractFirstNumber(assembleRow(prostateVolumeBlock.rows[0]));
+    context.prostateVolume = extractEllipseVolume(assembleRow(prostateVolumeBlock.rows[0]));
   }
 
   const residualVolumeBlock = blocks.find((block) =>
     typeof block.content === "string" && block.content.startsWith("Остаточный объём мочи")
   );
   if (residualVolumeBlock?.rows?.[0]) {
-    context.residualUrineVolume = extractFirstNumber(assembleRow(residualVolumeBlock.rows[0]));
+    context.residualUrineVolume = extractEllipseVolume(assembleRow(residualVolumeBlock.rows[0]));
   }
 
   const prostateUrethraBlock = blocks.find((block) =>
@@ -782,6 +783,11 @@ function collectBladderProstateContext(blocks) {
     context.psaTotal = numbers[0] ?? null;
     context.psaFree = numbers[1] ?? null;
     context.psaRatio = numbers[2] ?? null;
+    context.psaDensity = numbers[3] ?? (
+      Number.isFinite(context.psaTotal) && Number.isFinite(context.prostateVolume) && context.prostateVolume > 0
+        ? context.psaTotal / context.prostateVolume
+        : null
+    );
   }
 
   const prostateContoursBlock = blocks.find((block) =>
@@ -907,6 +913,12 @@ function applyBladderProstateRules(context, rules, pushConclusion, recommendatio
     }
     if (rule.minPsaRatio != null) {
       checks.push((context.psaRatio ?? -Infinity) >= rule.minPsaRatio);
+    }
+    if (rule.maxPsaDensity != null) {
+      checks.push((context.psaDensity ?? Infinity) <= rule.maxPsaDensity);
+    }
+    if (rule.minPsaDensity != null) {
+      checks.push((context.psaDensity ?? -Infinity) >= rule.minPsaDensity);
     }
 
     if (!checks.length || !checks.every(Boolean)) return;
@@ -1052,6 +1064,26 @@ function collectBreastContext(blocks, protocolRules) {
 function extractFirstNumber(value) {
   const match = (value || "").replace(',', '.').match(/-?\d+(?:\.\d+)?/);
   return match ? Number.parseFloat(match[0]) : null;
+}
+
+function extractEllipseVolume(value) {
+  const normalized = (value || "").replace(',', '.');
+  const match = normalized.match(/эллипсоиду\s*(-?\d+(?:\.\d+)?)/i);
+  if (match) {
+    return Number.parseFloat(match[1]);
+  }
+  return extractFirstNumber(value);
+}
+
+function parseNumericValue(value) {
+  if (value == null) return null;
+  const parsed = Number.parseFloat(String(value).replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatNumber(value, digits = 2) {
+  if (!Number.isFinite(value)) return "";
+  return value.toFixed(digits);
 }
 
 function collectLesions(rows) {
@@ -1614,9 +1646,19 @@ function buildPatientRecommendation(protocolRules, riskLevel, recommendationPart
   const templates = protocolRules.recommendationTemplates || {};
   const followUpMonthsByRisk = protocolRules.followUpMonthsByRisk || { benign: 12, moderate: 6, high: 3 };
   if (protocolId === "bladderprostate") {
-    return recommendationParts
+    const uniqueParts = recommendationParts
       .filter((value, index, arr) => value && arr.indexOf(value) === index)
-      .join(" ");
+      .filter((value, _, arr) => {
+        const normalized = value.trim().toLowerCase();
+        if (normalized === "консультация уролога.") {
+          return !arr.some((item) => item !== value && item.toLowerCase().includes("консультация уролога."));
+        }
+        if (normalized === "консультация онколога-уролога.") {
+          return !arr.some((item) => item !== value && item.toLowerCase().includes("консультация онколога-уролога."));
+        }
+        return true;
+      });
+    return uniqueParts.join(" ");
   }
 
   const followUpMonths = followUpMonthsByRisk[riskLevel] || 12;
@@ -2114,6 +2156,42 @@ function enforceProstateDependencies(blocks) {
         changed = true;
       }
     });
+  }
+
+  const psaBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("ПСА:")
+  );
+  const psaRow = psaBlock?.rows?.[0];
+  const psaInlineSegment = (psaRow?.segments || []).find((segment) =>
+    segment?.type === "inline" && Array.isArray(segment.inputValues) && segment.inputValues.length >= 3
+  );
+
+  const prostateSizeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Размеры:")
+  );
+  const prostateVolume = prostateSizeBlock?.rows?.[0]
+    ? extractEllipseVolume(assembleRow(prostateSizeBlock.rows[0]))
+    : null;
+
+  if (psaInlineSegment) {
+    const total = parseNumericValue(psaInlineSegment.inputValues[0]);
+    const free = parseNumericValue(psaInlineSegment.inputValues[1]);
+
+    if (Number.isFinite(total) && total > 0 && Number.isFinite(free)) {
+      const ratio = formatNumber((free / total) * 100, 2);
+      if (psaInlineSegment.inputValues[2] !== ratio) {
+        psaInlineSegment.inputValues[2] = ratio;
+        changed = true;
+      }
+    }
+
+    if (psaInlineSegment.inputValues.length >= 4 && Number.isFinite(total) && total > 0 && Number.isFinite(prostateVolume) && prostateVolume > 0) {
+      const density = formatNumber(total / prostateVolume, 3);
+      if (psaInlineSegment.inputValues[3] !== density) {
+        psaInlineSegment.inputValues[3] = density;
+        changed = true;
+      }
+    }
   }
 
   prostatePostOperationState = postOperation;
