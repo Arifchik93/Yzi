@@ -1983,11 +1983,12 @@ function renderRow(row, onChange, blocks) {
 
 function renderBlocks(blocks) {
   formContainer.innerHTML = "";
+  const refreshRows = [];
 
   const handleFormChange = () => {
     const changed = enforceTemplateDependencies(blocks);
     if (changed) {
-      renderBlocks(blocks);
+      refreshRows.forEach((refresh) => refresh());
       updateOutput();
       return;
     }
@@ -2033,6 +2034,8 @@ function renderBlocks(blocks) {
         }
       });
     };
+
+    refreshRows.push(renderRows);
 
     renderRows();
 
