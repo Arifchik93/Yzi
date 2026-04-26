@@ -42,6 +42,7 @@ const conclusionRulesFile = "conclusionRules.json";
 let conclusionRulesConfig = {};
 let breastDependencyState = { rightOperation: "", leftOperation: "" };
 let prostatePostOperationState = "";
+let lymphReactiveState = new WeakMap();
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -2240,10 +2241,63 @@ function enforceProstateDependencies(blocks) {
   return changed;
 }
 
+function isReactiveOrHyperplasticLymphStatus(statusValue) {
+  const normalized = (statusValue || "").toLowerCase().replace(/\s+/g, " ");
+  return normalized.includes("реактивный") || normalized.includes("гиперплазирован");
+}
+
+function enforceLymphDependencies(blocks) {
+  let changed = false;
+
+  blocks.forEach((block) => {
+    const content = typeof block.content === "string" ? block.content.toLowerCase() : "";
+    const isLymphBlock = content.includes("кмд") && content.includes("реактивн");
+    if (!isLymphBlock) return;
+
+    (block.rows || []).forEach((row) => {
+      const fields = getRowFieldSegments(row);
+      if (!fields.length) return;
+
+      const hasAdditionalLayout = fields.length >= 7;
+      const statusIndex = hasAdditionalLayout ? 6 : 4;
+      const amountIndex = hasAdditionalLayout ? 1 : 0;
+      const formIndex = hasAdditionalLayout ? 3 : 1;
+      const vascularIndex = hasAdditionalLayout ? 4 : 2;
+      const kmdIndex = hasAdditionalLayout ? 5 : 3;
+
+      const statusValue = (fields[statusIndex]?.value || "").trim();
+      const previousStatusValue = lymphReactiveState.get(row) || "";
+      const switchedToReactive =
+        isReactiveOrHyperplasticLymphStatus(statusValue) &&
+        previousStatusValue !== statusValue;
+
+      if (switchedToReactive) {
+        if (setSegmentOptionByToken(fields[amountIndex], "единичный", { exact: true })) {
+          changed = true;
+        }
+        if (setSegmentOptionByToken(fields[formIndex], "овальной формы", { exact: true })) {
+          changed = true;
+        }
+        if (setSegmentOptionByToken(fields[vascularIndex], "васкуляризация в области ворот", { exact: true })) {
+          changed = true;
+        }
+        if (setSegmentOptionByToken(fields[kmdIndex], "КМД сохранена. КМИ менее 0.5", { exact: true })) {
+          changed = true;
+        }
+      }
+
+      lymphReactiveState.set(row, statusValue);
+    });
+  });
+
+  return changed;
+}
+
 function enforceTemplateDependencies(blocks) {
   const breastChanged = enforceBreastDependencies(blocks);
   const prostateChanged = enforceProstateDependencies(blocks);
-  return breastChanged || prostateChanged;
+  const lymphChanged = enforceLymphDependencies(blocks);
+  return breastChanged || prostateChanged || lymphChanged;
 }
 
 function applyTemplate(template) {
@@ -2254,6 +2308,7 @@ function applyTemplate(template) {
 
   breastDependencyState = { rightOperation: "", leftOperation: "" };
   prostatePostOperationState = "";
+  lymphReactiveState = new WeakMap();
 
   renderBlocks(currentBlocks);
   updateOutput();
