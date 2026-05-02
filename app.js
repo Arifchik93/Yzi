@@ -42,6 +42,7 @@ const conclusionRulesFile = "conclusionRules.json";
 let conclusionRulesConfig = {};
 let breastDependencyState = { rightOperation: "", leftOperation: "" };
 let prostatePostOperationState = "";
+let lymphReactiveState = new WeakMap();
 
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
@@ -1859,7 +1860,7 @@ function renderField(segment, onChange) {
   return wrapper;
 }
 
-function renderInlineSegment(segment, onChange) {
+function renderInlineSegment(segment, onChange, blocks) {
   const wrapper = document.createElement("span");
   wrapper.className = "inline-field";
 
@@ -1878,6 +1879,8 @@ function renderInlineSegment(segment, onChange) {
       }
     });
   };
+
+  const inputElementsByIndex = new Map();
 
   segment.tokens.forEach((token) => {
     if (token.type === "text") {
@@ -1906,6 +1909,7 @@ function renderInlineSegment(segment, onChange) {
         input.classList.add("field-input--date");
       }
       autoSizeInput(input);
+      inputElementsByIndex.set(token.inputIndex, input);
       input.addEventListener("input", (event) => {
         segment.inputValues[token.inputIndex] = event.target.value;
         autoSizeInput(input);
@@ -1924,11 +1928,33 @@ function renderInlineSegment(segment, onChange) {
     }
   });
 
+  if (isPsaInlineSegment(segment)) {
+    const calculateButton = document.createElement("button");
+    calculateButton.type = "button";
+    calculateButton.className = "secondary inline-action-button";
+    calculateButton.textContent = "Рассчитать";
+    calculateButton.addEventListener("click", () => {
+      const changed = calculatePsaMetrics(segment, blocks);
+      if (!changed) return;
+
+      [2, 3].forEach((inputIndex) => {
+        const input = inputElementsByIndex.get(inputIndex);
+        if (!input) return;
+        input.value = segment.inputValues[inputIndex] ?? "";
+        autoSizeInput(input);
+      });
+
+      updateSegmentValue();
+      updateCalcOutputs();
+    });
+    wrapper.appendChild(calculateButton);
+  }
+
   updateCalcOutputs();
   return wrapper;
 }
 
-function renderRow(row, onChange) {
+function renderRow(row, onChange, blocks) {
   const rowEl = document.createElement("div");
   rowEl.className = "form-row";
 
@@ -1946,7 +1972,7 @@ function renderRow(row, onChange) {
     }
 
     if (segment.type === "inline") {
-      rowEl.appendChild(renderInlineSegment(segment, onChange));
+      rowEl.appendChild(renderInlineSegment(segment, onChange, blocks));
       return;
     }
 
@@ -1958,11 +1984,12 @@ function renderRow(row, onChange) {
 
 function renderBlocks(blocks) {
   formContainer.innerHTML = "";
+  const refreshRows = [];
 
   const handleFormChange = () => {
     const changed = enforceTemplateDependencies(blocks);
     if (changed) {
-      renderBlocks(blocks);
+      refreshRows.forEach((refresh) => refresh());
       updateOutput();
       return;
     }
@@ -1987,7 +2014,7 @@ function renderBlocks(blocks) {
     const renderRows = () => {
       rowsContainer.innerHTML = "";
       block.rows.forEach((row, index) => {
-        const rowEl = renderRow(row, handleFormChange);
+        const rowEl = renderRow(row, handleFormChange, blocks);
         rowsContainer.appendChild(rowEl);
 
         if (block.type === "repeat") {
@@ -2008,6 +2035,8 @@ function renderBlocks(blocks) {
         }
       });
     };
+
+    refreshRows.push(renderRows);
 
     renderRows();
 
@@ -2046,6 +2075,56 @@ function getBlockFieldValue(block) {
   const row = block?.rows?.[0];
   const field = getRowFieldSegments(row)[0];
   return (field?.value || "").trim();
+}
+
+function getProstateVolumeFromBlocks(blocks) {
+  const prostateSizeBlock = blocks.find((block) =>
+    typeof block.content === "string" && block.content.startsWith("Размеры:")
+  );
+
+  return prostateSizeBlock?.rows?.[0]
+    ? extractEllipseVolume(assembleRow(prostateSizeBlock.rows[0]))
+    : null;
+}
+
+function calculatePsaMetrics(segment, blocks) {
+  if (!segment || !Array.isArray(segment.inputValues) || segment.inputValues.length < 3) {
+    return false;
+  }
+
+  const total = parseNumericValue(segment.inputValues[0]);
+  const free = parseNumericValue(segment.inputValues[1]);
+  const prostateVolume = getProstateVolumeFromBlocks(blocks);
+  let changed = false;
+
+  if (Number.isFinite(total) && total > 0 && Number.isFinite(free)) {
+    const ratio = formatNumber((free / total) * 100, 2);
+    if (segment.inputValues[2] !== ratio) {
+      segment.inputValues[2] = ratio;
+      changed = true;
+    }
+  }
+
+  if (segment.inputValues.length >= 4 && Number.isFinite(total) && total > 0 && Number.isFinite(prostateVolume) && prostateVolume > 0) {
+    const density = formatNumber(total / prostateVolume, 3);
+    if (segment.inputValues[3] !== density) {
+      segment.inputValues[3] = density;
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+function isPsaInlineSegment(segment) {
+  if (!segment || segment.type !== "inline") return false;
+  const inlineText = (segment.tokens || [])
+    .filter((token) => token.type === "text")
+    .map((token) => token.value)
+    .join("")
+    .toLowerCase();
+
+  return inlineText.includes("пса:") && inlineText.includes("плотность пса");
 }
 
 function enforceBreastDependencies(blocks) {
@@ -2158,50 +2237,67 @@ function enforceProstateDependencies(blocks) {
     });
   }
 
-  const psaBlock = blocks.find((block) =>
-    typeof block.content === "string" && block.content.startsWith("ПСА:")
-  );
-  const psaRow = psaBlock?.rows?.[0];
-  const psaInlineSegment = (psaRow?.segments || []).find((segment) =>
-    segment?.type === "inline" && Array.isArray(segment.inputValues) && segment.inputValues.length >= 3
-  );
-
-  const prostateSizeBlock = blocks.find((block) =>
-    typeof block.content === "string" && block.content.startsWith("Размеры:")
-  );
-  const prostateVolume = prostateSizeBlock?.rows?.[0]
-    ? extractEllipseVolume(assembleRow(prostateSizeBlock.rows[0]))
-    : null;
-
-  if (psaInlineSegment) {
-    const total = parseNumericValue(psaInlineSegment.inputValues[0]);
-    const free = parseNumericValue(psaInlineSegment.inputValues[1]);
-
-    if (Number.isFinite(total) && total > 0 && Number.isFinite(free)) {
-      const ratio = formatNumber((free / total) * 100, 2);
-      if (psaInlineSegment.inputValues[2] !== ratio) {
-        psaInlineSegment.inputValues[2] = ratio;
-        changed = true;
-      }
-    }
-
-    if (psaInlineSegment.inputValues.length >= 4 && Number.isFinite(total) && total > 0 && Number.isFinite(prostateVolume) && prostateVolume > 0) {
-      const density = formatNumber(total / prostateVolume, 3);
-      if (psaInlineSegment.inputValues[3] !== density) {
-        psaInlineSegment.inputValues[3] = density;
-        changed = true;
-      }
-    }
-  }
-
   prostatePostOperationState = postOperation;
+  return changed;
+}
+
+function isReactiveOrHyperplasticLymphStatus(statusValue) {
+  const normalized = (statusValue || "").toLowerCase().replace(/\s+/g, " ");
+  return normalized.includes("реактивный") || normalized.includes("гиперплазирован");
+}
+
+function enforceLymphDependencies(blocks) {
+  let changed = false;
+
+  blocks.forEach((block) => {
+    const content = typeof block.content === "string" ? block.content.toLowerCase() : "";
+    const isLymphBlock = content.includes("кмд") && content.includes("реактивн");
+    if (!isLymphBlock) return;
+
+    (block.rows || []).forEach((row) => {
+      const fields = getRowFieldSegments(row);
+      if (!fields.length) return;
+
+      const hasAdditionalLayout = fields.length >= 7;
+      const statusIndex = hasAdditionalLayout ? 6 : 4;
+      const amountIndex = hasAdditionalLayout ? 1 : 0;
+      const formIndex = hasAdditionalLayout ? 3 : 1;
+      const vascularIndex = hasAdditionalLayout ? 4 : 2;
+      const kmdIndex = hasAdditionalLayout ? 5 : 3;
+
+      const statusValue = (fields[statusIndex]?.value || "").trim();
+      const previousStatusValue = lymphReactiveState.get(row) || "";
+      const switchedToReactive =
+        isReactiveOrHyperplasticLymphStatus(statusValue) &&
+        previousStatusValue !== statusValue;
+
+      if (switchedToReactive) {
+        if (setSegmentOptionByToken(fields[amountIndex], "единичный", { exact: true })) {
+          changed = true;
+        }
+        if (setSegmentOptionByToken(fields[formIndex], "овальной формы", { exact: true })) {
+          changed = true;
+        }
+        if (setSegmentOptionByToken(fields[vascularIndex], "васкуляризация в области ворот", { exact: true })) {
+          changed = true;
+        }
+        if (setSegmentOptionByToken(fields[kmdIndex], "КМД сохранена. КМИ менее 0.5", { exact: true })) {
+          changed = true;
+        }
+      }
+
+      lymphReactiveState.set(row, statusValue);
+    });
+  });
+
   return changed;
 }
 
 function enforceTemplateDependencies(blocks) {
   const breastChanged = enforceBreastDependencies(blocks);
   const prostateChanged = enforceProstateDependencies(blocks);
-  return breastChanged || prostateChanged;
+  const lymphChanged = enforceLymphDependencies(blocks);
+  return breastChanged || prostateChanged || lymphChanged;
 }
 
 function applyTemplate(template) {
@@ -2212,6 +2308,7 @@ function applyTemplate(template) {
 
   breastDependencyState = { rightOperation: "", leftOperation: "" };
   prostatePostOperationState = "";
+  lymphReactiveState = new WeakMap();
 
   renderBlocks(currentBlocks);
   updateOutput();

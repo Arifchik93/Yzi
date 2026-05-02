@@ -213,6 +213,11 @@ button {
   background: #d7dceb;
 }
 
+.inline-action-button {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 button.secondary {
   background: #e2e6ef;
   color: #1d1d1f;
