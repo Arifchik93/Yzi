@@ -683,7 +683,7 @@ function collectThyroidContext(blocks, protocolRules) {
   context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
   const significantLymph = context.lymphRows.filter(({ fields }) => {
     const amount = fields?.[0] || "";
-    return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
+    return amount && !isNormalLymphAmount(amount, (protocolRules.lymphRule || {}).normalAmountToken);
   });
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
   const lymphoproliferativeTokens = (protocolRules.lymphRule?.lymphoproliferativeTokens || ["лимфопролифератив"])
@@ -956,7 +956,7 @@ function collectLymphContext(blocks, protocolRules) {
   context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
   const significantLymph = context.lymphRows.filter(({ fields }) => {
     const amount = fields?.[0] || "";
-    return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
+    return amount && !isNormalLymphAmount(amount, (protocolRules.lymphRule || {}).normalAmountToken);
   });
 
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
@@ -1048,7 +1048,7 @@ function collectBreastContext(blocks, protocolRules) {
   context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
   const significantLymph = context.lymphRows.filter(({ fields }) => {
     const amount = fields?.[0] || "";
-    return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
+    return amount && !isNormalLymphAmount(amount, (protocolRules.lymphRule || {}).normalAmountToken);
   });
 
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
@@ -1060,6 +1060,13 @@ function collectBreastContext(blocks, protocolRules) {
   context.allLymphReactive = statuses.length > 0 && statuses.every((status) => status.includes("реактив") || status.includes("гиперплаз"));
 
   return context;
+}
+
+function isNormalLymphAmount(amountValue, normalAmountToken = "визуально не изменены") {
+  const amount = normalizeSpaces((amountValue || "").toLowerCase());
+  if (!amount) return false;
+  return amount.includes((normalAmountToken || "визуально не изменены").toLowerCase())
+    || amount.includes("не увеличены до");
 }
 
 function extractFirstNumber(value) {
@@ -1448,7 +1455,7 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
     .filter(({ fields }) => fields?.length >= 5)
     .filter(({ fields }) => {
       const amount = fields[rule.amountFieldIndex ?? 0] || "";
-      return amount && !amount.includes(rule.normalAmountToken || "визуально не изменены");
+      return amount && !isNormalLymphAmount(amount, rule.normalAmountToken);
     });
 
   if (!significantRows.length) {
@@ -1575,7 +1582,7 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
 
     const significantLymphRows = (context.lymphRows || []).filter((row) => {
       const amount = row?.fields?.[0] || "";
-      return amount && !amount.includes("визуально не изменены");
+      return amount && !isNormalLymphAmount(amount);
     });
     const noLesionsMatch = !rule.requireNoLesions || !context.hasLesions;
     const singleLesionMatch = !rule.requireSingleLesion || context.lesions.length === 1;
