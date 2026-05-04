@@ -342,9 +342,9 @@ function formatDate(value) {
 function computeEllipseVolume(values, coefficient = 0.52) {
   if (values.length < 3) return "";
   const [a, b, c] = values.map((item) => Number.parseFloat(item));
-  if ([a, b, c].some((item) => Number.isNaN(item))) return "";
+  if ([a, b, c].some((item) => Number.isNaN(item) || item <= 0)) return "";
   const volume = (a * b * c * coefficient) / 1000;
-  return volume.toFixed(2);
+  return volume > 0 ? volume.toFixed(2) : "";
 }
 
 function computeCalcValue(token, inputValues) {
@@ -2095,20 +2095,31 @@ function calculatePsaMetrics(segment, blocks) {
   const total = parseNumericValue(segment.inputValues[0]);
   const free = parseNumericValue(segment.inputValues[1]);
   const prostateVolume = getProstateVolumeFromBlocks(blocks);
+  const hasValidTotal = Number.isFinite(total) && total > 0;
+  const hasValidFree = Number.isFinite(free) && free > 0;
+  const hasValidProstateVolume = Number.isFinite(prostateVolume) && prostateVolume > 0;
   let changed = false;
 
-  if (Number.isFinite(total) && total > 0 && Number.isFinite(free)) {
+  if (hasValidTotal && hasValidFree) {
     const ratio = formatNumber((free / total) * 100, 2);
     if (segment.inputValues[2] !== ratio) {
       segment.inputValues[2] = ratio;
       changed = true;
     }
+  } else if (segment.inputValues[2] !== "") {
+    segment.inputValues[2] = "";
+    changed = true;
   }
 
-  if (segment.inputValues.length >= 4 && Number.isFinite(total) && total > 0 && Number.isFinite(prostateVolume) && prostateVolume > 0) {
-    const density = formatNumber(total / prostateVolume, 3);
-    if (segment.inputValues[3] !== density) {
-      segment.inputValues[3] = density;
+  if (segment.inputValues.length >= 4) {
+    if (hasValidTotal && hasValidProstateVolume) {
+      const density = formatNumber(total / prostateVolume, 3);
+      if (segment.inputValues[3] !== density) {
+        segment.inputValues[3] = density;
+        changed = true;
+      }
+    } else if (segment.inputValues[3] !== "") {
+      segment.inputValues[3] = "";
       changed = true;
     }
   }
