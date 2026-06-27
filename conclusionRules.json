@@ -232,7 +232,7 @@
     "fallbackConclusion": "По данным УЗИ молочных желез и регионарных лимфоузлов значимых патологических изменений не выявлено.",
     "lesionsRule": {
       "conclusionPrefix": "Очаговые образования молочных желез",
-      "noLesionsConclusion": "BI-RADS 1 справа. BI-RADS 1 слева."
+      "noLesionsConclusion": ""
     },
     "noduleRules": [
       {
