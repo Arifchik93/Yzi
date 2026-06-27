@@ -44,6 +44,25 @@ let breastDependencyState = { rightOperation: "", leftOperation: "" };
 let prostatePostOperationState = "";
 let lymphReactiveState = new WeakMap();
 
+function cloneOfflineData(data) {
+  if (!data) return null;
+  return typeof structuredClone === "function"
+    ? structuredClone(data)
+    : JSON.parse(JSON.stringify(data));
+}
+
+function getOfflineTemplates() {
+  return window.OFFLINE_TEMPLATES && typeof window.OFFLINE_TEMPLATES === "object"
+    ? window.OFFLINE_TEMPLATES
+    : {};
+}
+
+function getOfflineConclusionRules() {
+  return window.OFFLINE_CONCLUSION_RULES && typeof window.OFFLINE_CONCLUSION_RULES === "object"
+    ? window.OFFLINE_CONCLUSION_RULES
+    : {};
+}
+
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
     const option = document.createElement("option");
@@ -66,15 +85,42 @@ async function loadTemplate(protocolId, { bustCache = false } = {}) {
   if (!bustCache && templateCache.has(protocol.file)) {
     return templateCache.get(protocol.file);
   }
-  const url = bustCache ? `${protocol.file}?v=${Date.now()}` : protocol.file;
-  const response = await fetch(url);
-  const data = await response.json();
+
+  const offlineTemplate = getOfflineTemplates()[protocol.file];
+  if (!bustCache && offlineTemplate) {
+    const data = cloneOfflineData(offlineTemplate);
+    templateCache.set(protocol.file, data);
+    return data;
+  }
+
+  let data = null;
+  try {
+    const url = bustCache ? `${protocol.file}?v=${Date.now()}` : protocol.file;
+    const response = await fetch(url);
+    if (response.ok) {
+      data = await response.json();
+    }
+  } catch (error) {
+    data = null;
+  }
+
+  if (!data && offlineTemplate) {
+    data = cloneOfflineData(offlineTemplate);
+  }
+
+  if (!data) return null;
   templateCache.set(protocol.file, data);
   return data;
 }
 
 
 async function loadConclusionRules() {
+  const offlineRules = getOfflineConclusionRules();
+  if (Object.keys(offlineRules).length) {
+    conclusionRulesConfig = cloneOfflineData(offlineRules);
+    return;
+  }
+
   try {
     const response = await fetch(`${conclusionRulesFile}?v=${Date.now()}`);
     if (!response.ok) {
@@ -2345,6 +2391,10 @@ function clearLocalTemplate(protocolId) {
 async function handleProtocolChange() {
   loadStatus.textContent = "Загрузка...";
   const template = await loadTemplate(protocolSelect.value);
+  if (!template) {
+    loadStatus.textContent = "Шаблон не найден";
+    return;
+  }
   applyTemplate(template);
   loadStatus.textContent = "Готово";
 }
@@ -2450,6 +2500,10 @@ async function handleTemplateAction(action) {
     templateCache.delete(protocol.file);
     await loadConclusionRules();
     const template = await loadTemplate(protocol.id, { bustCache: true });
+    if (!template) {
+      loadStatus.textContent = "Шаблон не найден";
+      return;
+    }
     applyTemplate(template);
     loadStatus.textContent = "Готово";
     return;
@@ -2461,9 +2515,27 @@ async function handleTemplateAction(action) {
   }
 
   if (action === "download") {
-    const url = `${protocol.file}?v=${Date.now()}`;
-    const response = await fetch(url);
-    const text = await response.text();
+    let text = "";
+    try {
+      const url = `${protocol.file}?v=${Date.now()}`;
+      const response = await fetch(url);
+      if (response.ok) {
+        text = await response.text();
+      }
+    } catch (error) {
+      text = "";
+    }
+
+    if (!text) {
+      const template =
+        templateCache.get(protocol.file) ?? cloneOfflineData(getOfflineTemplates()[protocol.file]);
+      if (!template) {
+        loadStatus.textContent = "Шаблон не найден";
+        return;
+      }
+      text = JSON.stringify(template, null, 2);
+    }
+
     const blob = new Blob([text], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
