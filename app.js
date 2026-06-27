@@ -1348,8 +1348,15 @@ function applyLesionsRule(context, rule, pushConclusion) {
     })
     .filter(Boolean);
 
-  if (!items.length) return;
+  if (!items.length) {
+    if (rule.noLesionsConclusion) {
+      pushConclusion(rule.noLesionsConclusion);
+    }
+    return;
+  }
+
   const formations = sourceLesions.filter((item) => item.category !== "cyst" && !item.type.includes("киста"));
+  const cysts = sourceLesions.filter((item) => item.category === "cyst" || item.type.includes("киста"));
   const summarizeBySideAndBirads = (list, singular, plural) => {
     if (!list.length) return [];
     const highRisk = list.filter((item) => item.birads >= 4);
@@ -1381,6 +1388,15 @@ function applyLesionsRule(context, rule, pushConclusion) {
   };
 
   summarizeBySideAndBirads(formations, "Очаговое образование", "Очаговые образования").forEach(pushConclusion);
+  summarizeBySideAndBirads(cysts, "Киста", "Кисты").forEach(pushConclusion);
+
+  const sidesWithFindings = new Set(sourceLesions.map((item) => item.side).filter(Boolean));
+  if (!sidesWithFindings.has("right")) {
+    pushConclusion("BI-RADS 1 справа.");
+  }
+  if (!sidesWithFindings.has("left")) {
+    pushConclusion("BI-RADS 1 слева.");
+  }
 }
 
 function applyNoduleRules(context, rules, pushConclusion, recommendationParts, setRisk, options = {}) {
