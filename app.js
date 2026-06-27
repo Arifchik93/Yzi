@@ -1031,10 +1031,11 @@ function collectBreastContext(blocks, protocolRules) {
   context.ducts = [context.ductsBySide.right, context.ductsBySide.left].filter(Boolean).join("; ");
 
   const lesionRows = blocks
-    .filter((block) => typeof block.title === "string" && block.title.startsWith("Выявленные образования"))
+    .filter((block) => typeof block.title === "string" && (block.title.startsWith("Выявленные образования") || block.title.startsWith("Выявленные изменения")))
     .flatMap((block) => {
       const side = block.title.includes("правая") ? "right" : block.title.includes("левая") ? "left" : "";
-      return (block.rows || []).map((row) => ({ row, side }));
+      const category = block.title.toLowerCase().includes("кисты") ? "cyst" : "lesion";
+      return (block.rows || []).map((row) => ({ row, side, category }));
     });
   context.lesions = collectLesions(lesionRows);
   context.hasLesions = context.lesions.length > 0;
@@ -1098,12 +1099,12 @@ function collectLesions(rows) {
   return rows
     .map((entry) => {
       if (entry?.row) {
-        return { fields: getFieldValues(entry.row), sideHint: entry.side || "" };
+        return { fields: getFieldValues(entry.row), sideHint: entry.side || "", category: entry.category || "" };
       }
-      return { fields: getFieldValues(entry), sideHint: "" };
+      return { fields: getFieldValues(entry), sideHint: "", category: "" };
     })
     .filter(({ fields }) => fields.length >= 8)
-    .map(({ fields, sideHint }) => {
+    .map(({ fields, sideHint, category }) => {
       const isBreastRow = fields.length >= 9 || /BI-RADS/i.test(fields[fields.length - 1] || "");
 
       if (isBreastRow) {
@@ -1140,6 +1141,7 @@ function collectLesions(rows) {
           classification,
           birads,
           tirads: 0,
+          category: category || (type.toLowerCase().includes("кист") ? "cyst" : "lesion"),
         };
       }
 
@@ -1301,8 +1303,12 @@ function applyMorphotypeRules(context, rules, pushConclusion, recommendationPart
 
 function applyLesionsRule(context, rule, pushConclusion) {
   if (!rule || rule.enabled === false) return;
+  const isBreast = (rule.conclusionPrefix || "").toLowerCase().includes("молочных желез");
   if (!context.hasLesions) {
-    if (rule.noLesionsConclusion) {
+    if (isBreast) {
+      pushConclusion("Очаговые образования правой молочной железы не выявлены. BI-RADS 1 справа.");
+      pushConclusion("Очаговые образования левой молочной железы не выявлены. BI-RADS 1 слева.");
+    } else if (rule.noLesionsConclusion) {
       pushConclusion(rule.noLesionsConclusion);
     }
     return;
@@ -1311,6 +1317,11 @@ function applyLesionsRule(context, rule, pushConclusion) {
   const sourceLesions = context.hasOperation
     ? context.lesions.filter((item) => !item.isScarZone)
     : context.lesions;
+
+  if (isBreast) {
+    pushBreastGroupedConclusions(sourceLesions, pushConclusion);
+    return;
+  }
 
   const items = sourceLesions
     .map((item) => {
@@ -1322,6 +1333,42 @@ function applyLesionsRule(context, rule, pushConclusion) {
   if (!items.length) return;
   const prefix = rule.conclusionPrefix || "Очаговые образования";
   pushConclusion(`${prefix}: ${items.join("; ")}.`);
+}
+
+function pushBreastGroupedConclusions(sourceLesions, pushConclusion) {
+  const valid = sourceLesions.filter((item) => item.birads > 0);
+  const lowRisk = valid.filter((item) => item.birads >= 2 && item.birads <= 3);
+  const highRisk = valid.filter((item) => item.birads >= 4);
+
+  const sidePhrase = (items) => {
+    const sides = new Set(items.map((item) => item.side).filter(Boolean));
+    if (sides.has("right") && sides.has("left")) return "в обеих молочных железах";
+    if (sides.has("right")) return "в правой молочной железе";
+    if (sides.has("left")) return "в левой молочной железе";
+    return "в молочных железах";
+  };
+
+  const biradsPhrase = (items) => {
+    const values = [...new Set(items.map((item) => item.birads).filter(Boolean))].sort((a, b) => a - b);
+    return values.length ? `BI-RADS ${values.join("-")}` : "";
+  };
+
+  const pushGrouped = (items, category, singular, plural) => {
+    if (!items.length) return;
+    const countWord = items.length === 1 ? singular : plural;
+    const br = biradsPhrase(items);
+    pushConclusion(`${countWord} ${sidePhrase(items)}${br ? `. ${br}` : ""}.`);
+  };
+
+  pushGrouped(lowRisk.filter((item) => item.category !== "cyst"), "lesion", "Очаговое образование", "Очаговые образования");
+  pushGrouped(lowRisk.filter((item) => item.category === "cyst"), "cyst", "Киста", "Кисты");
+
+  highRisk.forEach((item) => {
+    const sideText = item.sideLabel ? `${item.sideLabel} молочной железы` : "";
+    const prefix = item.category === "cyst" ? "Киста" : "Очаговое образование";
+    const details = [sideText, item.location, item.type, item.classification].filter(Boolean).join(", ");
+    pushConclusion(`${prefix}${details ? `: ${details}` : ""}.`);
+  });
 }
 
 function applyNoduleRules(context, rules, pushConclusion, recommendationParts, setRisk, options = {}) {
@@ -2175,7 +2222,7 @@ function enforceBreastDependencies(blocks) {
       operation !== prevOperation && (operation === "секторальная резекция" || operation === "мастэктомия");
 
     if (switchedToOperation) {
-      const lesionBlock = blocks.find((block) => block.title === `Выявленные образования (${side})`);
+      const lesionBlock = blocks.find((block) => block.title === `Выявленные образования (${side})` || block.title === `Выявленные изменения - образования (${side})` || block.title === `Выявленные изменения - кисты (${side})`);
       (lesionBlock?.rows || []).forEach((row) => {
         const fields = getRowFieldSegments(row);
         if (setSegmentOptionByToken(fields[1], "в зоне послеоперационного рубца")) {
