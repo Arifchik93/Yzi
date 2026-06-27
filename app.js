@@ -44,6 +44,22 @@ let breastDependencyState = { rightOperation: "", leftOperation: "" };
 let prostatePostOperationState = "";
 let lymphReactiveState = new WeakMap();
 
+function cloneOfflineData(data) {
+  if (!data) return null;
+  if (typeof structuredClone === "function") {
+    return structuredClone(data);
+  }
+  return JSON.parse(JSON.stringify(data));
+}
+
+function getOfflineTemplate(file) {
+  return cloneOfflineData(window.OFFLINE_PROTOCOL_DATA?.templates?.[file]);
+}
+
+function getOfflineConclusionRules() {
+  return cloneOfflineData(window.OFFLINE_PROTOCOL_DATA?.conclusionRules) || {};
+}
+
 function populateProtocolOptions() {
   protocols.forEach((protocol) => {
     const option = document.createElement("option");
@@ -67,8 +83,19 @@ async function loadTemplate(protocolId, { bustCache = false } = {}) {
     return templateCache.get(protocol.file);
   }
   const url = bustCache ? `${protocol.file}?v=${Date.now()}` : protocol.file;
-  const response = await fetch(url);
-  const data = await response.json();
+  let data;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Template request failed: ${response.status}`);
+    }
+    data = await response.json();
+  } catch (error) {
+    data = getOfflineTemplate(protocol.file);
+  }
+  if (!data) {
+    throw new Error(`Template not found: ${protocol.file}`);
+  }
   templateCache.set(protocol.file, data);
   return data;
 }
@@ -78,13 +105,13 @@ async function loadConclusionRules() {
   try {
     const response = await fetch(`${conclusionRulesFile}?v=${Date.now()}`);
     if (!response.ok) {
-      conclusionRulesConfig = {};
+      conclusionRulesConfig = getOfflineConclusionRules();
       return;
     }
     const parsed = await response.json();
     conclusionRulesConfig = parsed && typeof parsed === "object" ? parsed : {};
   } catch (error) {
-    conclusionRulesConfig = {};
+    conclusionRulesConfig = getOfflineConclusionRules();
   }
 }
 
@@ -2341,13 +2368,22 @@ function getLocalTemplateKey(protocolId) {
 }
 
 function readLocalTemplate(protocolId) {
-  const raw = localStorage.getItem(getLocalTemplateKey(protocolId));
+  let raw;
+  try {
+    raw = localStorage.getItem(getLocalTemplateKey(protocolId));
+  } catch (error) {
+    return null;
+  }
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw);
     return parsed;
   } catch (error) {
-    localStorage.removeItem(getLocalTemplateKey(protocolId));
+    try {
+      localStorage.removeItem(getLocalTemplateKey(protocolId));
+    } catch (storageError) {
+      // Ignore unavailable storage in offline/private browser modes.
+    }
     return null;
   }
 }
@@ -2357,14 +2393,22 @@ function writeLocalTemplate(protocolId, text) {
 }
 
 function clearLocalTemplate(protocolId) {
-  localStorage.removeItem(getLocalTemplateKey(protocolId));
+  try {
+    localStorage.removeItem(getLocalTemplateKey(protocolId));
+  } catch (error) {
+    // Ignore unavailable storage in offline/private browser modes.
+  }
 }
 
 async function handleProtocolChange() {
   loadStatus.textContent = "Загрузка...";
-  const template = await loadTemplate(protocolSelect.value);
-  applyTemplate(template);
-  loadStatus.textContent = "Готово";
+  try {
+    const template = await loadTemplate(protocolSelect.value);
+    applyTemplate(template);
+    loadStatus.textContent = "Готово";
+  } catch (error) {
+    loadStatus.textContent = "Не удалось загрузить шаблон";
+  }
 }
 
 protocolSelect.addEventListener("change", handleProtocolChange);
@@ -2480,8 +2524,17 @@ async function handleTemplateAction(action) {
 
   if (action === "download") {
     const url = `${protocol.file}?v=${Date.now()}`;
-    const response = await fetch(url);
-    const text = await response.text();
+    let text = "";
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Template request failed: ${response.status}`);
+      }
+      text = await response.text();
+    } catch (error) {
+      const template = templateCache.get(protocol.file) || getOfflineTemplate(protocol.file);
+      text = JSON.stringify(template, null, 2);
+    }
     const blob = new Blob([text], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
