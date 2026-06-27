@@ -445,7 +445,9 @@ function updateOutput() {
       const rowsText = block.rows
         .map((row) => assembleRow(row).trim())
         .filter(Boolean);
-      return rowsText.join("\n");
+      const blockText = rowsText.join("\n");
+      const shouldStartOnNewLine = typeof block.title === "string" && block.title.startsWith("Выявленные изменения — кисты");
+      return shouldStartOnNewLine && blockText ? `\n${blockText}` : blockText;
     })
     .join("");
 
