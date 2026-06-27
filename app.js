@@ -342,9 +342,9 @@ function formatDate(value) {
 function computeEllipseVolume(values, coefficient = 0.52) {
   if (values.length < 3) return "";
   const [a, b, c] = values.map((item) => Number.parseFloat(item));
-  if ([a, b, c].some((item) => Number.isNaN(item))) return "";
+  if ([a, b, c].some((item) => Number.isNaN(item) || item <= 0)) return "";
   const volume = (a * b * c * coefficient) / 1000;
-  return volume.toFixed(2);
+  return volume > 0 ? volume.toFixed(2) : "";
 }
 
 function computeCalcValue(token, inputValues) {
@@ -683,7 +683,7 @@ function collectThyroidContext(blocks, protocolRules) {
   context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
   const significantLymph = context.lymphRows.filter(({ fields }) => {
     const amount = fields?.[0] || "";
-    return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
+    return amount && !isNormalLymphAmount(amount, (protocolRules.lymphRule || {}).normalAmountToken);
   });
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
   const lymphoproliferativeTokens = (protocolRules.lymphRule?.lymphoproliferativeTokens || ["лимфопролифератив"])
@@ -956,7 +956,7 @@ function collectLymphContext(blocks, protocolRules) {
   context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
   const significantLymph = context.lymphRows.filter(({ fields }) => {
     const amount = fields?.[0] || "";
-    return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
+    return amount && !isNormalLymphAmount(amount, (protocolRules.lymphRule || {}).normalAmountToken);
   });
 
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
@@ -1048,7 +1048,7 @@ function collectBreastContext(blocks, protocolRules) {
   context.lymphRows = collectLymphRows(blocks, protocolRules.lymphRule || {});
   const significantLymph = context.lymphRows.filter(({ fields }) => {
     const amount = fields?.[0] || "";
-    return amount && !amount.includes((protocolRules.lymphRule || {}).normalAmountToken || "визуально не изменены");
+    return amount && !isNormalLymphAmount(amount, (protocolRules.lymphRule || {}).normalAmountToken);
   });
 
   const statuses = significantLymph.map(({ fields }) => normalizeSpaces((fields?.[4] || "").toLowerCase()));
@@ -1060,6 +1060,13 @@ function collectBreastContext(blocks, protocolRules) {
   context.allLymphReactive = statuses.length > 0 && statuses.every((status) => status.includes("реактив") || status.includes("гиперплаз"));
 
   return context;
+}
+
+function isNormalLymphAmount(amountValue, normalAmountToken = "визуально не изменены") {
+  const amount = normalizeSpaces((amountValue || "").toLowerCase());
+  if (!amount) return false;
+  return amount.includes((normalAmountToken || "визуально не изменены").toLowerCase())
+    || amount.includes("не увеличены до");
 }
 
 function extractFirstNumber(value) {
@@ -1448,7 +1455,7 @@ function applyLymphRule(context, rule, pushConclusion, recommendationParts, setR
     .filter(({ fields }) => fields?.length >= 5)
     .filter(({ fields }) => {
       const amount = fields[rule.amountFieldIndex ?? 0] || "";
-      return amount && !amount.includes(rule.normalAmountToken || "визуально не изменены");
+      return amount && !isNormalLymphAmount(amount, rule.normalAmountToken);
     });
 
   if (!significantRows.length) {
@@ -1575,7 +1582,7 @@ function applyCombinedRules(context, rules, pushConclusion, recommendationParts,
 
     const significantLymphRows = (context.lymphRows || []).filter((row) => {
       const amount = row?.fields?.[0] || "";
-      return amount && !amount.includes("визуально не изменены");
+      return amount && !isNormalLymphAmount(amount);
     });
     const noLesionsMatch = !rule.requireNoLesions || !context.hasLesions;
     const singleLesionMatch = !rule.requireSingleLesion || context.lesions.length === 1;
@@ -2095,20 +2102,31 @@ function calculatePsaMetrics(segment, blocks) {
   const total = parseNumericValue(segment.inputValues[0]);
   const free = parseNumericValue(segment.inputValues[1]);
   const prostateVolume = getProstateVolumeFromBlocks(blocks);
+  const hasValidTotal = Number.isFinite(total) && total > 0;
+  const hasValidFree = Number.isFinite(free) && free > 0;
+  const hasValidProstateVolume = Number.isFinite(prostateVolume) && prostateVolume > 0;
   let changed = false;
 
-  if (Number.isFinite(total) && total > 0 && Number.isFinite(free)) {
+  if (hasValidTotal && hasValidFree) {
     const ratio = formatNumber((free / total) * 100, 2);
     if (segment.inputValues[2] !== ratio) {
       segment.inputValues[2] = ratio;
       changed = true;
     }
+  } else if (segment.inputValues[2] !== "") {
+    segment.inputValues[2] = "";
+    changed = true;
   }
 
-  if (segment.inputValues.length >= 4 && Number.isFinite(total) && total > 0 && Number.isFinite(prostateVolume) && prostateVolume > 0) {
-    const density = formatNumber(total / prostateVolume, 3);
-    if (segment.inputValues[3] !== density) {
-      segment.inputValues[3] = density;
+  if (segment.inputValues.length >= 4) {
+    if (hasValidTotal && hasValidProstateVolume) {
+      const density = formatNumber(total / prostateVolume, 3);
+      if (segment.inputValues[3] !== density) {
+        segment.inputValues[3] = density;
+        changed = true;
+      }
+    } else if (segment.inputValues[3] !== "") {
+      segment.inputValues[3] = "";
       changed = true;
     }
   }
