@@ -445,9 +445,19 @@ function updateOutput() {
       const rowsText = block.rows
         .map((row) => assembleRow(row).trim())
         .filter(Boolean);
-      const blockText = rowsText.join("\n");
-      const shouldStartOnNewLine = typeof block.title === "string" && block.title.startsWith("Выявленные изменения — кисты");
-      return shouldStartOnNewLine && blockText ? `\n${blockText}` : blockText;
+      if (typeof block.title === "string" && block.title.startsWith("Выявленные изменения —")) {
+        const isCystBlock = block.title.startsWith("Выявленные изменения — кисты");
+        const label = isCystBlock ? "Выявленные кисты" : "Выявленные образования";
+        const cleanedRows = rowsText
+          .map((rowText) => rowText
+            .replace(/^Выявленные изменения:\s*/iu, "")
+            .replace(/^(образования|кисты):\s*/iu, "")
+            .trim())
+          .filter(Boolean);
+        const blockText = `${label}:\n${cleanedRows.join("\n")}`;
+        return isCystBlock && blockText ? `\n${blockText}` : blockText;
+      }
+      return rowsText.join("\n");
     })
     .join("");
 
@@ -532,7 +542,7 @@ function buildAutoConclusion(blocks, protocolId, rulesConfig) {
   applyTopographyRules(context, protocolRules.topographyRules || [], pushConclusion, recommendationParts, setRisk);
   applyDuctRules(context, protocolRules.ductRules || [], pushConclusion, recommendationParts, setRisk);
   applyMorphotypeRules(context, protocolRules.morphotypeRules || [], pushConclusion, recommendationParts, setRisk);
-  applyLesionsRule(context, protocolRules.lesionsRule, pushConclusion);
+  applyLesionsRule(context, protocolRules.lesionsRule, pushConclusion, { protocolId });
   applyNoduleRules(
     context,
     protocolRules.noduleRules || [],
@@ -1330,7 +1340,9 @@ function applyMorphotypeRules(context, rules, pushConclusion, recommendationPart
   });
 }
 
-function applyLesionsRule(context, rule, pushConclusion) {
+function applyLesionsRule(context, rule, pushConclusion, options = {}) {
+  const { protocolId = "" } = options;
+  const isBreastProtocol = protocolId === "breast";
   if (!rule || rule.enabled === false) return;
   if (!context.hasLesions) {
     if (rule.noLesionsConclusion) {
@@ -1392,12 +1404,14 @@ function applyLesionsRule(context, rule, pushConclusion) {
   summarizeBySideAndBirads(formations, "Очаговое образование", "Очаговые образования").forEach(pushConclusion);
   summarizeBySideAndBirads(cysts, "Киста", "Кисты").forEach(pushConclusion);
 
-  const sidesWithFindings = new Set(sourceLesions.map((item) => item.side).filter(Boolean));
-  if (!sidesWithFindings.has("right")) {
-    pushConclusion("BI-RADS 1 справа.");
-  }
-  if (!sidesWithFindings.has("left")) {
-    pushConclusion("BI-RADS 1 слева.");
+  if (isBreastProtocol) {
+    const sidesWithFindings = new Set(sourceLesions.map((item) => item.side).filter(Boolean));
+    if (!sidesWithFindings.has("right")) {
+      pushConclusion("BI-RADS 1 справа.");
+    }
+    if (!sidesWithFindings.has("left")) {
+      pushConclusion("BI-RADS 1 слева.");
+    }
   }
 }
 

@@ -138,7 +138,7 @@
       }
     ],
     "lymphRule": {
-      "predefinedBlockPattern": "^(Яремные|Верхние медиастинальные)",
+      "predefinedBlockPattern": "^(Яремные|Верхние медиастинальные|Предларингеальные|Предтрахеальные)",
       "additionalBlockTitle": "Дополнительные лимфоузлы",
       "additionalGroupFieldIndex": 0,
       "additionalAmountFieldIndex": 1,
@@ -339,7 +339,7 @@
       "enabled": false
     },
     "lymphRule": {
-      "predefinedBlockPattern": "^(Поднижнечелюстные|Яремные|Надключичные|Подключичные|Подмышечные|Паховые)",
+      "predefinedBlockPattern": "^(Предларингеальные|Предтрахеальные|Поднижнечелюстные|Яремные|Надключичные|Подключичные|Подмышечные|Паховые)",
       "additionalBlockTitle": "Дополнительные лимфоузлы",
       "additionalGroupFieldIndex": 0,
       "additionalAmountFieldIndex": 1,
